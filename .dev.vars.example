@@ -1,0 +1,18 @@
+# Copy to `.dev.vars` for local development. `.dev.vars` is gitignored.
+# These are wrangler dev secrets/vars; production secrets go via `wrangler secret put`.
+
+# --- Local dev switches (NEVER set these in production wrangler.jsonc) ---
+# Enables POST /dev/simulate (fake inbound webhooks without Meta).
+DEV_SIMULATOR=true
+# Lets /admin/api/* through without a Cloudflare Access JWT (there is no Access
+# in front of `wrangler dev`). Fails closed everywhere this is not exactly "true".
+DEV_ACCESS_BYPASS=true
+
+# --- Meta WhatsApp Cloud API (kept off locally; WA_ENABLED stays "false") ---
+WA_VERIFY_TOKEN=dev-verify-token
+WA_APP_SECRET=dev-app-secret
+WA_ACCESS_TOKEN=dev-access-token
+WA_PHONE_NUMBER_ID=000000000000000
+
+# --- Cloudflare Access AUD (only needed to test the real gate locally) ---
+# CF_ACCESS_AUD=your-access-application-aud

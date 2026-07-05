@@ -1,0 +1,61 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "whatsapp-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+
+  // Static assets serve the future /admin inbox SPA. The Worker runs FIRST for
+  // the bot surface (webhook, admin API, dev tools); everything else is served
+  // straight from ./public. `single-page-application` makes unmatched asset
+  // paths fall back to index.html for client-side routing.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/webhook", "/admin/api/*", "/dev/*"],
+  },
+
+  // D1: the bot's own database. `database_id` is a placeholder — the owner must
+  // run `npx wrangler d1 create whatsapp-bot` and paste the printed id here (or
+  // set it in the dashboard) before the first remote deploy. Local dev/tests use
+  // a separate on-disk SQLite keyed by `database_name`, so the id is irrelevant
+  // locally.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "whatsapp-bot",
+      // TODO(owner): replace with the real database_id from `wrangler d1 create whatsapp-bot`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+
+  // Workers AI — declared now, used by the next stage (AI fallback + KB Q&A).
+  "ai": {
+    "binding": "AI",
+  },
+
+  // Non-secret configuration. Secrets (WA_ACCESS_TOKEN, WA_APP_SECRET,
+  // WA_VERIFY_TOKEN, WA_PHONE_NUMBER_ID) are set with `wrangler secret put` and
+  // in .dev.vars locally. DEV_SIMULATOR / DEV_ACCESS_BYPASS are intentionally
+  // NOT set here — they live only in .dev.vars so they can never leak to prod.
+  "vars": {
+    "CF_ACCESS_TEAM_DOMAIN": "https://barrakudesbegur.cloudflareaccess.com",
+    // TODO(owner): paste the Access application AUD(s) — comma-separated, the
+    // production app plus the preview-deployment app (see coin-reader/wrangler.toml).
+    "CF_ACCESS_AUD": "",
+    "CF_ACCESS_EMAIL_DOMAIN": "@barrakudesbegur.org",
+    // Keep "false" until Meta setup exists: outbound sends become no-ops logged
+    // to D1, so the whole system is testable end-to-end via the simulator.
+    "WA_ENABLED": "false",
+    // Meta Graph API version for outbound sends. v23.0 is what the current
+    // official Cloud API docs use in their examples; the /messages API shape is
+    // stable across recent versions, so bump freely when Meta releases a newer one.
+    "WA_GRAPH_VERSION": "v23.0",
+  },
+}
