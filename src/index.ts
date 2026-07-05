@@ -18,13 +18,11 @@ import { D1Store } from "./db/d1.ts";
 import { WorkersAiProvider } from "./ai/workers-ai.ts";
 import { makeDeps, handleWebhook } from "./router.ts";
 import { verifySignature } from "./lib/signature.ts";
-import { requireAccess, type AccessIdentity } from "./access.ts";
+import { adminApi } from "./admin/routes.ts";
 import { buildSimulatedWebhook, isSimulateInput } from "./wa/simulate.ts";
 import type { WebhookEnvelope } from "./wa/wire.ts";
 
-type Variables = { identity: AccessIdentity };
-
-const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+const app = new Hono<{ Bindings: Env }>();
 
 // --- Meta webhook verification (GET) -------------------------------------
 app.get("/webhook", (c) => {
@@ -95,36 +93,7 @@ app.post("/dev/simulate", async (c) => {
   });
 });
 
-// --- Admin API (behind Cloudflare Access) --------------------------------
-app.all("/admin/api/*", async (c, next) => {
-  const identity = await requireAccess(c.req.raw, c.env);
-  if (identity instanceof Response) return identity; // 403, fail closed
-  c.set("identity", identity);
-  await next();
-});
-
-app.get("/admin/api/health", (c) => {
-  return c.json({ ok: true, service: "kudi", email: c.get("identity").email });
-});
-
-app.get("/admin/api/conversations", async (c) => {
-  const store = new D1Store(c.env.DB);
-  return c.json({ conversations: await store.listConversations() });
-});
-
-app.get("/admin/api/conversations/:id/messages", async (c) => {
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
-  const store = new D1Store(c.env.DB);
-  return c.json({ messages: await store.listMessagesForPerson(id) });
-});
-
-app.get("/admin/api/settings", async (c) => {
-  const store = new D1Store(c.env.DB);
-  return c.json({
-    course_status: (await store.getSetting("course_status")) ?? "exploring",
-    course_status_note: (await store.getSetting("course_status_note")) ?? "",
-  });
-});
+// --- Admin API (behind Cloudflare Access; see src/admin/routes.ts) --------
+app.route("/admin/api", adminApi);
 
 export default app;

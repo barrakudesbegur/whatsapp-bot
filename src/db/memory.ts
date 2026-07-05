@@ -6,6 +6,7 @@
  */
 
 import type {
+  CompletedFlowRow,
   ConversationSummary,
   CreateFlowInput,
   FlowInstanceRow,
@@ -59,6 +60,11 @@ export class MemoryStore implements Store {
 
   async getPersonByWaId(waId: string): Promise<PersonRow | null> {
     const p = this.people.find((p) => p.wa_id === waId);
+    return p ? { ...p } : null;
+  }
+
+  async getPerson(id: number): Promise<PersonRow | null> {
+    const p = this.people.find((p) => p.id === id);
     return p ? { ...p } : null;
   }
 
@@ -289,5 +295,26 @@ export class MemoryStore implements Store {
       .filter((m) => m.person_id === personId)
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id)
       .map((m) => ({ ...m }));
+  }
+
+  async exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]> {
+    return this.flows
+      .filter((f) => f.flow_type === flowType && f.status === "completed")
+      .sort(
+        (a, b) =>
+          (b.completed_at ?? "").localeCompare(a.completed_at ?? "") ||
+          b.id - a.id,
+      )
+      .map((f) => {
+        const p = this.people.find((p) => p.id === f.person_id);
+        return {
+          person_id: f.person_id,
+          wa_id: p?.wa_id ?? "",
+          display_name: p?.display_name ?? null,
+          profile_name: p?.profile_name ?? null,
+          data_json: f.data_json,
+          completed_at: f.completed_at,
+        };
+      });
   }
 }

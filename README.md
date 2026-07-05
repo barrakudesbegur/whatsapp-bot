@@ -9,9 +9,8 @@ free-text fallback. Everything runs locally without Meta: while `WA_ENABLED` is 
 outbound sends are recorded to D1 as no-ops, so the whole system is testable end-to-end
 via the built-in simulator.
 
-> Implemented: PLAN §4.1–4.6, §4.8 (phases 3–4) — core bot + the Workers AI
-> fallback with Kudi's knowledge base. The inbox admin SPA (§4.7, phase 5) is
-> the remaining stage; `/admin` is a placeholder page meanwhile.
+> Implemented: PLAN §4.1–4.8 (phases 3–5) — core bot, the Workers AI fallback
+> with Kudi's knowledge base, and the mobile-first inbox admin SPA at `/admin`.
 
 ## Architecture
 
@@ -46,8 +45,10 @@ Meta Cloud API ──POST /webhook──▶  verify X-Hub-Signature-256 (raw bod
 | `kb/` + `src/kb/`      | Kudi's knowledge: static `kb/*.md` (imported as text at build) + the live agenda feed from the landing (`src/kb/events.ts`).           |
 | `src/access.ts`        | Cloudflare Access JWT verification (ported from coin-reader), fail-closed.                                                             |
 | `src/lib/signature.ts` | `X-Hub-Signature-256` HMAC-SHA256 verification (real WebCrypto).                                                                       |
+| `src/admin/`           | Inbox admin API (`routes.ts`, mounted at `/admin/api`) + transcript/CSV rendering (`render.ts`).                                       |
+| `admin/`               | Inbox admin SPA source (Svelte 5). `npm run build:admin` → `public/admin/` (served as static assets).                                  |
 | `migrations/`          | D1 schema (PLAN 4.2) + indexes + `settings` seed.                                                                                      |
-| `public/`              | Static assets: `/` info page and the placeholder `/admin` SPA.                                                                         |
+| `public/`              | Static assets: `/` info page; `public/admin/` is the built SPA (git-ignored, rebuilt by `npm run build`).                              |
 
 **Concurrency safety.** Webhook retries are deduped by the `messages.wa_message_id`
 UNIQUE constraint (`INSERT ... ON CONFLICT DO NOTHING`). Two concurrent invocations
@@ -140,6 +141,31 @@ npx wrangler d1 execute whatsapp-bot --local --json \
 ```
 
 Admin API (dev bypass on): `curl $BASE/admin/api/health` · `…/admin/api/conversations`.
+
+## Inbox admin (PLAN §4.7)
+
+Mobile-first Svelte 5 SPA at `/admin/` (source in `admin/`, built into
+`public/admin/` and served as static assets; the `/admin/api/*` routes it calls
+sit behind the same Cloudflare Access gate). Three tabs:
+
+- **Converses** — conversation list with flow-status badges; a WhatsApp-like
+  transcript (bubbles, interactive buttons/lists rendered as chips, AI/status
+  meta); a reply-as-Kudi box that is **disabled with an explanation when the
+  person's last inbound is > 24 h old** (the customer-service window is closed;
+  the server also enforces this, returning 409). CSV export of completed surveys
+  and a per-person GDPR erase button.
+- **Coneixement** — CRUD for the dynamic `kb_entries` + the `course_status`
+  (+ note) editor.
+- **Simulador** — shown only when `DEV_SIMULATOR=true`: a chat playground over
+  `/dev/simulate` to drive flows (typing + tapping the interactive options)
+  without Meta.
+
+```bash
+npm run build:admin   # admin/ -> public/admin/ (also runs before `npm run dev`)
+```
+
+Verified end-to-end with the Playwright MCP against `wrangler dev`: full
+simulated survey, reply-as-Kudi, KB create, CSV export.
 
 ## AI — Kudi's brain (PLAN §4.6)
 

@@ -4,3 +4,6 @@ dist/
 .dev.vars
 *.log
 .DS_Store
+
+# Built admin SPA (produced by `npm run build:admin` from admin/ sources).
+/public/admin/

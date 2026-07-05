@@ -6,6 +6,7 @@
  */
 
 import type {
+  CompletedFlowRow,
   ConversationSummary,
   CreateFlowInput,
   FlowInstanceRow,
@@ -46,6 +47,13 @@ export class D1Store implements Store {
     return await this.db
       .prepare(`SELECT * FROM people WHERE wa_id = ?1`)
       .bind(waId)
+      .first<PersonRow>();
+  }
+
+  async getPerson(id: number): Promise<PersonRow | null> {
+    return await this.db
+      .prepare(`SELECT * FROM people WHERE id = ?1`)
+      .bind(id)
       .first<PersonRow>();
   }
 
@@ -341,6 +349,21 @@ export class D1Store implements Store {
       )
       .bind(personId)
       .all<MessageRow>();
+    return results ?? [];
+  }
+
+  async exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT f.person_id, p.wa_id, p.display_name, p.profile_name,
+                f.data_json, f.completed_at
+           FROM flow_instances f
+           JOIN people p ON p.id = f.person_id
+          WHERE f.flow_type = ?1 AND f.status = 'completed'
+          ORDER BY f.completed_at DESC, f.id DESC`,
+      )
+      .bind(flowType)
+      .all<CompletedFlowRow>();
     return results ?? [];
   }
 }

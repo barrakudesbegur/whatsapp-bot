@@ -5,14 +5,17 @@
   "type": "module",
   "description": "Kudi — Barrakudes de Begur WhatsApp bot (Cloudflare Worker + Hono + D1 + Workers AI)",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "npm run build:admin && wrangler dev",
+    "build": "npm run build:admin",
+    "build:admin": "vite build --config admin/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "check:admin": "svelte-check --tsconfig admin/tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "validate": "npm run format:check && npm run typecheck && npm run test",
-    "deploy:dry": "wrangler deploy --dry-run",
+    "validate": "npm run format:check && npm run typecheck && npm run check:admin && npm run test",
+    "deploy:dry": "npm run build:admin && wrangler deploy --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply whatsapp-bot --local",
     "db:query:local": "wrangler d1 execute whatsapp-bot --local --command"
   },
@@ -22,9 +25,14 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250620.0",
+    "@sveltejs/vite-plugin-svelte": "^4.0.4",
     "@types/node": "^22.10.5",
     "prettier": "^3.4.2",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.56.4",
+    "svelte-check": "^4.7.1",
     "typescript": "^5.7.3",
+    "vite": "^5.4.21",
     "vitest": "^2.1.8",
     "wrangler": "^4.20.0"
   }

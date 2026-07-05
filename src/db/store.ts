@@ -95,6 +95,7 @@ export interface Store {
     at: string,
   ): Promise<PersonRow>;
   getPersonByWaId(waId: string): Promise<PersonRow | null>;
+  getPerson(id: number): Promise<PersonRow | null>;
   setDisplayName(personId: number, name: string, at: string): Promise<void>;
   /** GDPR erase: flag + scrub the person row and delete their messages. */
   anonymizePerson(personId: number, at: string): Promise<void>;
@@ -144,6 +145,17 @@ export interface Store {
   // Admin read helpers (used by /admin/api/* and verification).
   listConversations(limit?: number): Promise<ConversationSummary[]>;
   listMessagesForPerson(personId: number): Promise<MessageRow[]>;
+  /** Completed instances of a flow, joined with the person, for CSV export. */
+  exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]>;
+}
+
+export interface CompletedFlowRow {
+  person_id: number;
+  wa_id: string;
+  display_name: string | null;
+  profile_name: string | null;
+  data_json: string;
+  completed_at: string | null;
 }
 
 export interface KbEntryRow {
