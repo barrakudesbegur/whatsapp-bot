@@ -1,0 +1,31 @@
+name: Deploy to Cloudflare Workers
+
+# Push-to-deploy (replaces the old Cloudflare Pages git integration). Requires a
+# repo secret CLOUDFLARE_API_TOKEN — create it from the "Edit Cloudflare Workers"
+# API token template (account ID is pinned in wrangler.jsonc). Remote D1
+# migrations are NOT run here; apply them with `npm run db:apply:remote`.
+# Secrets like WA_* / DEV_SIMULATOR are set with `wrangler secret put`, not here.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy

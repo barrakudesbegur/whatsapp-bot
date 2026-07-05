@@ -1,6 +1,7 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "whatsapp-bot",
+	"account_id": "1b969539a48578a0a3c5b1005b363b50",
 	"compatibility_date": "2026-07-05",
 	// nodejs_als powers SvelteKit's getRequestEvent() (AsyncLocalStorage).
 	"compatibility_flags": ["nodejs_als"],
