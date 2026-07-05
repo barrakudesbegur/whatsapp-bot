@@ -7,10 +7,14 @@
   "observability": {
     "enabled": true,
   },
-
   // kb/*.md is imported as plain text (Kudi's static knowledge base).
-  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
-
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.md"],
+      "fallthrough": true,
+    },
+  ],
   // Static assets serve the future /admin inbox SPA. The Worker runs FIRST for
   // the bot surface (webhook, admin API, dev tools); everything else is served
   // straight from ./public. `single-page-application` makes unmatched asset
@@ -22,7 +26,6 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/webhook", "/admin/api/*", "/dev/*"],
   },
-
   // D1: the bot's own database. `database_id` is a placeholder — the owner must
   // run `npx wrangler d1 create whatsapp-bot` and paste the printed id here (or
   // set it in the dashboard) before the first remote deploy. Local dev/tests use
@@ -32,17 +35,14 @@
     {
       "binding": "DB",
       "database_name": "whatsapp-bot",
-      // TODO(owner): replace with the real database_id from `wrangler d1 create whatsapp-bot`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "37af59b3-98e8-406f-b123-8aaa22f74738",
       "migrations_dir": "migrations",
     },
   ],
-
   // Workers AI — declared now, used by the next stage (AI fallback + KB Q&A).
   "ai": {
     "binding": "AI",
   },
-
   // Non-secret configuration. Secrets (WA_ACCESS_TOKEN, WA_APP_SECRET,
   // WA_VERIFY_TOKEN, WA_PHONE_NUMBER_ID) are set with `wrangler secret put` and
   // in .dev.vars locally. DEV_SIMULATOR / DEV_ACCESS_BYPASS are intentionally
