@@ -17,7 +17,7 @@ function fakeEnv(run: (model: unknown, input: unknown) => Promise<unknown>): Env
 }
 
 const VALID = JSON.stringify({
-	reply: 'Ei! Som-hi 🧡',
+	replies: [{ text: 'Ei! Som-hi 🧡' }],
 	actions: [{ type: 'record_signup', choice: 'grup' }]
 });
 
@@ -45,7 +45,7 @@ describe('WorkersAiDecider', () => {
 	it('rung 1b: an already-parsed JSON-mode response object is accepted', async () => {
 		const env = fakeEnv(async () => ({ response: JSON.parse(VALID) }));
 		const out = await new WorkersAiDecider(env).decide(makeState());
-		expect(out.decision.reply).toContain('Som-hi');
+		expect(out.decision.replies[0]!.text).toContain('Som-hi');
 	});
 
 	it('rung 2: retries without response_format when the binding rejects it', async () => {
@@ -66,7 +66,7 @@ describe('WorkersAiDecider', () => {
 		const env = fakeEnv(async () => ({ response: 'sóc un model que no sap fer JSON' }));
 		const out = await new WorkersAiDecider(env).decide(makeState());
 		expect(out.decision.actions).toEqual([]);
-		expect(out.decision.reply.length).toBeGreaterThan(0);
+		expect(out.decision.replies[0]!.text.length).toBeGreaterThan(0);
 	});
 
 	it('rung 3: thrown error → fallback with NO actions and #error meta', async () => {

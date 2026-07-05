@@ -95,22 +95,25 @@ describe('AI-first survey via decisions', () => {
 	it('start → name → signup → availability completes, with correct D1 state', async () => {
 		const h = newHarness();
 		enqueue(h, {
-			reply: "T'ho explico! Com vols que et digui?",
+			replies: [{ text: "T'ho explico! Com vols que et digui?" }],
 			actions: [{ type: 'start_survey' }]
 		});
 		await text(h, WA, "explica'm el curs de sardanes");
 
-		enqueue(h, { reply: 'Genial, Pol!', actions: [{ type: 'set_display_name', name: 'Pol' }] });
+		enqueue(h, {
+			replies: [{ text: 'Genial, Pol!' }],
+			actions: [{ type: 'set_display_name', name: 'Pol' }]
+		});
 		await text(h, WA, 'em dic Pol');
 
 		enqueue(h, {
-			reply: 'Fet! Quan et va bé?',
+			replies: [{ text: 'Fet! Quan et va bé?' }],
 			actions: [{ type: 'record_signup', choice: 'grup' }]
 		});
 		await text(h, WA, "apunta'm al grup");
 
 		enqueue(h, {
-			reply: 'Ja està! 🎉',
+			replies: [{ text: 'Ja està! 🎉' }],
 			actions: [{ type: 'record_availability', bucket: 'dissabtes' }]
 		});
 		const last = await text(h, WA, 'els dissabtes');
@@ -125,7 +128,7 @@ describe('AI-first survey via decisions', () => {
 
 	it('a single free-text message costs exactly one model call', async () => {
 		const h = newHarness();
-		enqueue(h, { reply: 'ei!', actions: [] });
+		enqueue(h, { replies: [{ text: 'ei!' }], actions: [] });
 		await text(h, WA, 'hola qui ets?');
 		expect(h.decider.calls).toBe(1);
 	});
@@ -133,7 +136,7 @@ describe('AI-first survey via decisions', () => {
 	it('mixed intent: answers a question AND records an answer in one turn', async () => {
 		const h = newHarness();
 		enqueue(h, {
-			reply: 'És gratis de moment! I t’apunto al grup 🧡',
+			replies: [{ text: 'És gratis de moment! I t’apunto al grup 🧡' }],
 			actions: [{ type: 'record_signup', choice: 'grup' }]
 		});
 		await text(h, WA, 'és gratis? apunta’m al grup');
@@ -144,10 +147,14 @@ describe('AI-first survey via decisions', () => {
 
 	it('handles a refused name gracefully (Anònim) and keeps going', async () => {
 		const h = newHarness();
-		enqueue(h, { reply: 'Som-hi!', actions: [{ type: 'start_survey' }] });
+		enqueue(h, { replies: [{ text: 'Som-hi!' }], actions: [{ type: 'start_survey' }] });
 		await text(h, WA, 'vull saber del curs');
 		enqueue(h, {
-			reply: 'Cap problema, de moment et dic Anònim 😊 Quan sapiguem si es fa, què vols que faci?',
+			replies: [
+				{
+					text: 'Cap problema, de moment et dic Anònim 😊 Quan sapiguem si es fa, què vols que faci?'
+				}
+			],
 			actions: [{ type: 'set_display_name', name: 'Anònim' }]
 		});
 		await text(h, WA, "no te'l vull donar");
@@ -160,12 +167,16 @@ describe('AI-first survey via decisions', () => {
 	it('renders model-generated options as a valid interactive', async () => {
 		const h = newHarness();
 		enqueue(h, {
-			reply: 'Què vols que faci?',
-			actions: [{ type: 'start_survey' }],
-			control: {
-				kind: 'buttons',
-				options: [{ title: 'Al grup' }, { title: "Avisa'm" }, { title: 'Res' }]
-			}
+			replies: [
+				{
+					text: 'Què vols que faci?',
+					control: {
+						kind: 'buttons',
+						options: [{ title: 'Al grup' }, { title: "Avisa'm" }, { title: 'Res' }]
+					}
+				}
+			],
+			actions: [{ type: 'start_survey' }]
 		});
 		const sent = await text(h, WA, 'què passa quan se sàpiga?');
 		assertWithinLimits(sent);
@@ -178,7 +189,7 @@ describe('interactive taps flow back through the model', () => {
 		const h = newHarness();
 		// Kudi previously offered a list; the user taps "Dissabtes".
 		enqueue(h, {
-			reply: 'Apuntat!',
+			replies: [{ text: 'Apuntat!' }],
 			actions: [{ type: 'record_availability', bucket: 'dissabtes' }]
 		});
 		await button(h, WA, 'opt_0', 'ctx-msg-id', 'Dissabtes');
@@ -192,7 +203,7 @@ describe('interactive taps flow back through the model', () => {
 describe('deterministic fast-paths make zero model calls', () => {
 	it('unsupported media apologizes (and nudges an active survey) without calling the model', async () => {
 		const h = newHarness();
-		enqueue(h, { reply: 'Som-hi!', actions: [{ type: 'start_survey' }] });
+		enqueue(h, { replies: [{ text: 'Som-hi!' }], actions: [{ type: 'start_survey' }] });
 		await text(h, WA, 'comencem'); // survey active, name missing
 		const before = h.decider.calls;
 
@@ -206,7 +217,7 @@ describe('deterministic fast-paths make zero model calls', () => {
 describe('duplicate / out-of-order webhooks', () => {
 	it('replaying the same message id produces no second send and no second model call', async () => {
 		const h = newHarness();
-		enqueue(h, { reply: 'ei', actions: [] });
+		enqueue(h, { replies: [{ text: 'ei' }], actions: [] });
 		const first = await runWebhook(h, rawText(WA, 'wamid.DUP', 'hola'));
 		expect(first.length).toBeGreaterThan(0);
 		const replay = await runWebhook(h, rawText(WA, 'wamid.DUP', 'hola'));
@@ -218,7 +229,7 @@ describe('duplicate / out-of-order webhooks', () => {
 describe('status webhooks', () => {
 	it('updates the matching outbound row and logs failures', async () => {
 		const h = newHarness();
-		enqueue(h, { reply: 'ei', actions: [] });
+		enqueue(h, { replies: [{ text: 'ei' }], actions: [] });
 		const sent = await text(h, WA, 'hola');
 		const outId = sent[0]!.waMessageId;
 

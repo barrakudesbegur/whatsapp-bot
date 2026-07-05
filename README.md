@@ -89,7 +89,9 @@ action writes are idempotent set-semantics — replays can't double-apply.
 
 ## The decision contract (how "AI decides + acts" works)
 
-`decide(state) → { reply, actions[], control? }` — one call per message.
+`decide(state) → { replies: [{text, control?}], actions[] }` — one call per
+message; the reply is 1–10 short WhatsApp bubbles, each optionally carrying its
+own tappable options.
 
 - **State in** (`survey/state.ts`): who the person is, the submission **draft**
   (collected answers + which fields are still `missing`), the KB, and a short
@@ -98,11 +100,13 @@ action writes are idempotent set-semantics — replays can't double-apply.
   `set_display_name`, `record_signup(grup|avisam|res)`,
   `record_availability(bucket, note?)`, `start_survey`, `restart_survey`,
   `decline_survey`.
-- **Control out** (optional): the model may generate tappable options —
-  `{kind:'buttons'|'list', options:[{title,…}]}`. Code assigns ids, clamps
-  titles, and validates against WhatsApp interactive limits (falls back to plain
-  text if unusable). A tap is fed back through `decide()` as its title, so
-  understanding is never button-privileged.
+- **Controls out** (optional, per bubble): any bubble may carry generated
+  tappable options — `{kind:'buttons'|'list', options:[{title,…}]}`. Code
+  assigns ids, clamps titles, and validates against WhatsApp interactive limits
+  (a bubble with an unusable control degrades to plain text). A tap — whenever
+  it happens, even on an old message — is fed back through `decide()` as its
+  title, so understanding is never button-privileged and out-of-order taps are
+  harmless.
 - **Draft → record**: every datum lands in the per-person
   `flow_instances.data_json` draft (`{action, availability, availability_raw?}`,
   the same shape the admin + CSV export read). **Code** derives completion

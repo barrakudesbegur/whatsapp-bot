@@ -29,10 +29,15 @@ import { buildDecideMessages } from './decide-prompt.ts';
 /** Default model, overridable per-environment via the `AI_MODEL` var (config, no code change). */
 export const PRIMARY_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
+// Generation is deliberately constrained: Kudi's bubbles must be SHORT (owner
+// requirement), and fp8 long generations degenerate into repeating the same
+// questions until the token budget runs out (observed live). The repetition/
+// frequency penalties break that loop, low temperature keeps decisions precise,
+// and max_tokens bounds the damage while leaving room for multi-bubble replies.
 const MAX_TOKENS = 512;
-// Low temperature: decisions must be precise (act, don't ramble); higher values
-// made the model narrate actions without emitting them and loop repetitively.
 const TEMPERATURE = 0.3;
+const REPETITION_PENALTY = 1.2;
+const FREQUENCY_PENALTY = 0.4;
 
 interface ChatResult {
 	response?: unknown;
@@ -43,6 +48,8 @@ type RunInput = {
 	messages: ChatMessage[];
 	max_tokens?: number;
 	temperature?: number;
+	repetition_penalty?: number;
+	frequency_penalty?: number;
 	response_format?: unknown;
 };
 
@@ -76,22 +83,23 @@ export class WorkersAiDecider implements Decider {
 		const ai = this.env.AI as unknown as {
 			run(model: string, input: RunInput): Promise<unknown>;
 		};
+		const params = {
+			max_tokens: MAX_TOKENS,
+			temperature: TEMPERATURE,
+			repetition_penalty: REPETITION_PENALTY,
+			frequency_penalty: FREQUENCY_PENALTY
+		};
 		try {
 			return await ai.run(this.model, {
 				messages,
-				max_tokens: MAX_TOKENS,
-				temperature: TEMPERATURE,
+				...params,
 				response_format: { type: 'json_schema', json_schema: DECISION_JSON_SCHEMA }
 			});
 		} catch (err) {
 			// A model/binding that rejects response_format must not disable the AI —
 			// retry once relying on the prompt + extractJson to recover the JSON.
 			console.error('decide(): response_format rejected → retrying without it', err);
-			return await ai.run(this.model, {
-				messages,
-				max_tokens: MAX_TOKENS,
-				temperature: TEMPERATURE
-			});
+			return await ai.run(this.model, { messages, ...params });
 		}
 	}
 

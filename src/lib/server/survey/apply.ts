@@ -82,7 +82,7 @@ export async function applyDecision(
 		);
 	}
 
-	return sender.send(person, [buildReplyMessage(decision)], {
+	return sender.send(person, buildReplyMessages(decision), {
 		flowInstanceId: surveyInstanceId,
 		aiMeta: meta
 	});
@@ -130,12 +130,17 @@ async function persistSurvey(
 	return row.id;
 }
 
-/** Turn a decision into one WhatsApp message: model options if valid, else text. */
-export function buildReplyMessage(decision: Decision): OutMessage {
-	const body = clamp(decision.reply, LIMITS.BODY_MAX);
-	if (!decision.control) return { kind: 'text', body };
-	const interactive = buildControlMessage(body, decision.control);
-	return interactive ?? { kind: 'text', body };
+/**
+ * Turn a decision into WhatsApp messages: one message per bubble, in order.
+ * A bubble with a valid `control` becomes an interactive (buttons/list); an
+ * invalid control degrades that bubble to plain text.
+ */
+export function buildReplyMessages(decision: Decision): OutMessage[] {
+	return decision.replies.map((bubble): OutMessage => {
+		const body = clamp(bubble.text, LIMITS.BODY_MAX);
+		if (!bubble.control) return { kind: 'text', body };
+		return buildControlMessage(body, bubble.control) ?? { kind: 'text', body };
+	});
 }
 
 function buildControlMessage(body: string, control: Control): OutMessage | null {

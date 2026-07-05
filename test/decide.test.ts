@@ -63,26 +63,52 @@ describe('parseDecision', () => {
 		]);
 	});
 
-	it('requires a non-empty reply', () => {
-		expect(parseDecision('{"reply":"","actions":[]}')).toBeNull();
+	it('requires at least one non-empty bubble', () => {
+		expect(parseDecision('{"replies":[],"actions":[]}')).toBeNull();
+		expect(parseDecision('{"replies":[{"text":"  "}],"actions":[]}')).toBeNull();
 		expect(parseDecision('{"actions":[]}')).toBeNull();
 		expect(parseDecision('not json')).toBeNull();
 	});
 
-	it('parses a valid control (buttons/list) and ignores kind:none', () => {
-		const btn = parseDecision(
-			'{"reply":"q","actions":[],"control":{"kind":"buttons","options":[{"title":"Sí"},{"title":"No"}]}}'
+	it('parses bubbles with per-bubble controls', () => {
+		const d = parseDecision(
+			JSON.stringify({
+				replies: [
+					{ text: 'Fet!' },
+					{
+						text: 'Què vols que faci?',
+						control: { kind: 'buttons', options: [{ title: 'Sí' }, { title: 'No' }] }
+					}
+				],
+				actions: []
+			})
 		);
-		expect(btn?.control).toEqual({ kind: 'buttons', options: [{ title: 'Sí' }, { title: 'No' }] });
-		const none = parseDecision('{"reply":"q","actions":[],"control":{"kind":"none"}}');
-		expect(none?.control).toBeUndefined();
+		expect(d?.replies).toHaveLength(2);
+		expect(d?.replies[0]).toEqual({ text: 'Fet!' });
+		expect(d?.replies[1]?.control).toEqual({
+			kind: 'buttons',
+			options: [{ title: 'Sí' }, { title: 'No' }]
+		});
 	});
 
-	it('trims empty options and drops an option-less control', () => {
-		const d = parseDecision(
-			'{"reply":"q","actions":[],"control":{"kind":"buttons","options":[{"title":"  "}]}}'
+	it('accepts legacy shapes: reply string, plain-string bubbles, top-level control → last bubble', () => {
+		const legacy = parseDecision(
+			'{"reply":"q","actions":[],"control":{"kind":"buttons","options":[{"title":"Sí"}]}}'
 		);
-		expect(d?.control).toBeUndefined();
+		expect(legacy?.replies).toEqual([
+			{ text: 'q', control: { kind: 'buttons', options: [{ title: 'Sí' }] } }
+		]);
+		const strings = parseDecision('{"replies":["a","b"],"actions":[]}');
+		expect(strings?.replies).toEqual([{ text: 'a' }, { text: 'b' }]);
+	});
+
+	it('ignores kind:none and drops an option-less control (bubble degrades to text)', () => {
+		const none = parseDecision('{"replies":[{"text":"q","control":{"kind":"none"}}],"actions":[]}');
+		expect(none?.replies[0]).toEqual({ text: 'q' });
+		const empty = parseDecision(
+			'{"replies":[{"text":"q","control":{"kind":"buttons","options":[{"title":"  "}]}}],"actions":[]}'
+		);
+		expect(empty?.replies[0]).toEqual({ text: 'q' });
 	});
 
 	it('validates record_availability note and set_display_name length via schema pipe', () => {
@@ -131,8 +157,8 @@ describe('fallbackDecision', () => {
 			})
 		);
 		expect(d.actions).toEqual([]);
-		expect(d.reply).toContain('grup'); // signup nudge
-		expect(d.reply.length).toBeGreaterThan(0);
+		expect(d.replies[0]!.text).toContain('grup'); // signup nudge
+		expect(d.replies).toHaveLength(1);
 	});
 
 	it('is a plain apology when no survey is active', () => {
@@ -147,7 +173,7 @@ describe('fallbackDecision', () => {
 			})
 		);
 		expect(d.actions).toEqual([]);
-		expect(d.reply).toContain('Instagram');
+		expect(d.replies[0]!.text).toContain('Instagram');
 	});
 });
 

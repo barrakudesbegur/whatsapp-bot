@@ -194,10 +194,16 @@ async function run(model: string, c: Case): Promise<{ text: string; ms: number }
 	const decision = parseDecision(raw);
 	if (!decision) return { text: `UNPARSEABLE → fallback | raw: ${raw.slice(0, 120)}`, ms };
 	const actions = decision.actions.map((a) => JSON.stringify(a)).join(' ') || '(cap acció)';
-	const control = decision.control
-		? ` | control:${decision.control.kind}[${decision.control.options.map((o) => o.title).join('|')}]`
-		: '';
-	return { text: `${decision.reply} ⟶ ${actions}${control}`, ms };
+	const bubbles = decision.replies
+		.map(
+			(b) =>
+				b.text +
+				(b.control
+					? ` [${b.control.kind}: ${b.control.options.map((o) => o.title).join('|')}]`
+					: '')
+		)
+		.join(' ⏐ ');
+	return { text: `${bubbles} ⟶ ${actions}`, ms };
 }
 
 for (const c of CASES) {

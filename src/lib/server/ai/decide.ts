@@ -68,13 +68,24 @@ export interface ControlOption {
 	description?: string;
 }
 
+/** One WhatsApp bubble: short text, optionally with tappable options attached. */
+export interface Bubble {
+	text: string;
+	/** Tappable options for this bubble (absent = plain text). */
+	control?: Control;
+}
+
 export interface Decision {
-	/** Kudi's in-voice reply. Becomes a text body, or the body of an interactive. */
-	reply: string;
+	/**
+	 * Kudi's in-voice reply as 1–10 SHORT WhatsApp bubbles, sent in order
+	 * (usually 1–3). Any bubble may carry a `control`; people may tap options in
+	 * any order — even later, or while another message is being processed — and
+	 * each tap simply flows back through decide() against the state of that
+	 * moment, so nothing depends on taps being "current".
+	 */
+	replies: Bubble[];
 	/** Side effects to apply, in order. Empty for pure chat / KB answers. */
 	actions: Action[];
-	/** Optional tappable options for the NEXT question (absent = plain text). */
-	control?: Control;
 }
 
 // --- State handed to the model each turn ----------------------------------
@@ -121,9 +132,43 @@ export interface Decider {
 export const DECISION_JSON_SCHEMA = {
 	type: 'object',
 	additionalProperties: false,
-	required: ['reply', 'actions'],
+	required: ['replies', 'actions'],
 	properties: {
-		reply: { type: 'string', maxLength: 1024 },
+		replies: {
+			type: 'array',
+			minItems: 1,
+			maxItems: 10,
+			items: {
+				type: 'object',
+				additionalProperties: false,
+				required: ['text'],
+				properties: {
+					text: { type: 'string', maxLength: 1024 },
+					control: {
+						type: 'object',
+						additionalProperties: false,
+						required: ['kind'],
+						properties: {
+							kind: { type: 'string', enum: ['none', 'buttons', 'list'] },
+							label: { type: 'string', maxLength: 20 },
+							options: {
+								type: 'array',
+								maxItems: 10,
+								items: {
+									type: 'object',
+									additionalProperties: false,
+									required: ['title'],
+									properties: {
+										title: { type: 'string', maxLength: 24 },
+										description: { type: 'string', maxLength: 72 }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		actions: {
 			type: 'array',
 			maxItems: 4,
@@ -147,28 +192,6 @@ export const DECISION_JSON_SCHEMA = {
 					choice: { type: 'string', enum: [...SIGNUP_CHOICES] },
 					bucket: { type: 'string', enum: [...AVAILABILITY_BUCKETS] },
 					note: { type: 'string', maxLength: 280 }
-				}
-			}
-		},
-		control: {
-			type: 'object',
-			additionalProperties: false,
-			required: ['kind'],
-			properties: {
-				kind: { type: 'string', enum: ['none', 'buttons', 'list'] },
-				label: { type: 'string', maxLength: 20 },
-				options: {
-					type: 'array',
-					maxItems: 10,
-					items: {
-						type: 'object',
-						additionalProperties: false,
-						required: ['title'],
-						properties: {
-							title: { type: 'string', maxLength: 24 },
-							description: { type: 'string', maxLength: 72 }
-						}
-					}
 				}
 			}
 		}
@@ -207,8 +230,35 @@ export function parseDecision(raw: string): Decision | null {
 	if (!obj || typeof obj !== 'object') return null;
 	const o = obj as Record<string, unknown>;
 
-	const reply = typeof o.reply === 'string' ? o.reply.trim() : '';
-	if (!reply) return null;
+	// Bubbles: [{text, control?}]. Tolerates plain strings in the array, a legacy
+	// single `reply` string, and a legacy top-level `control` (→ last bubble).
+	const rawReplies = Array.isArray(o.replies)
+		? o.replies
+		: typeof o.reply === 'string'
+			? [o.reply]
+			: [];
+	const replies = rawReplies
+		.map((r): Bubble | null => {
+			if (typeof r === 'string') {
+				const text = r.trim().slice(0, REPLY_MAX);
+				return text ? { text } : null;
+			}
+			if (r && typeof r === 'object') {
+				const b = r as Record<string, unknown>;
+				const text = typeof b.text === 'string' ? b.text.trim().slice(0, REPLY_MAX) : '';
+				if (!text) return null;
+				const control = parseControl(b.control);
+				return control ? { text, control } : { text };
+			}
+			return null;
+		})
+		.filter((b): b is Bubble => b !== null)
+		.slice(0, 10);
+	if (replies.length === 0) return null;
+
+	const legacyControl = parseControl(o.control);
+	const last = replies[replies.length - 1];
+	if (legacyControl && last && !last.control) last.control = legacyControl;
 
 	const actions: Action[] = [];
 	if (Array.isArray(o.actions)) {
@@ -218,7 +268,7 @@ export function parseDecision(raw: string): Decision | null {
 		}
 	}
 
-	return { reply: reply.slice(0, REPLY_MAX), actions, control: parseControl(o.control) };
+	return { replies, actions };
 }
 
 function parseControl(raw: unknown): Control | undefined {
@@ -319,5 +369,5 @@ export function fallbackDecision(state: DecisionState): Decision {
 		'Pots tornar-m’ho a dir? Si és urgent, escriu-nos a Instagram @barrakudesbegur 🧡';
 	const next = state.missing[0];
 	if (state.survey.status === 'active' && next) reply += ` ${missingFieldNudge(next)}`;
-	return { reply, actions: [] };
+	return { replies: [{ text: reply }], actions: [] };
 }

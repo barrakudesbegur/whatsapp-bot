@@ -35,7 +35,7 @@ describe('applyDecision — writes', () => {
 	it('set_display_name saves the name, clamped to 40 chars', async () => {
 		const { store, person, deps } = await setup();
 		await run(deps, person, {
-			reply: 'ok',
+			replies: [{ text: 'ok' }],
 			actions: [{ type: 'set_display_name', name: 'x'.repeat(60) }]
 		});
 		expect((await store.getPerson(person.id))?.display_name).toHaveLength(40);
@@ -44,7 +44,7 @@ describe('applyDecision — writes', () => {
 	it('records signup + availability and CODE derives completion', async () => {
 		const { store, person, deps } = await setup();
 		await run(deps, person, {
-			reply: 'apuntat!',
+			replies: [{ text: 'apuntat!' }],
 			actions: [
 				{ type: 'record_signup', choice: 'grup' },
 				{ type: 'record_availability', bucket: 'dissabtes' }
@@ -58,7 +58,10 @@ describe('applyDecision — writes', () => {
 
 	it('record_signup res → declined', async () => {
 		const { store, person, deps } = await setup();
-		await run(deps, person, { reply: 'cap problema', actions: [{ type: 'decline_survey' }] });
+		await run(deps, person, {
+			replies: [{ text: 'cap problema' }],
+			actions: [{ type: 'decline_survey' }]
+		});
 		const row = await surveyRow(store, person.id);
 		expect(row?.status).toBe('declined');
 		expect(JSON.parse(row!.data_json)).toMatchObject({ action: 'res' });
@@ -67,7 +70,7 @@ describe('applyDecision — writes', () => {
 	it('custom availability stores the free-text note as availability_raw', async () => {
 		const { store, person, deps } = await setup();
 		await run(deps, person, {
-			reply: 'apuntat',
+			replies: [{ text: 'apuntat' }],
 			actions: [
 				{ type: 'record_signup', choice: 'avisam' },
 				{ type: 'record_availability', bucket: 'custom', note: 'divendres a la nit' }
@@ -94,7 +97,7 @@ describe('applyDecision — writes', () => {
 		await run(
 			deps,
 			person,
-			{ reply: 'refem-ho', actions: [{ type: 'restart_survey' }] },
+			{ replies: [{ text: 'refem-ho' }], actions: [{ type: 'restart_survey' }] },
 			{
 				survey: {
 					status: 'completed',
@@ -113,19 +116,40 @@ describe('applyDecision — writes', () => {
 describe('applyDecision — reply rendering', () => {
 	it('a decision with no control sends a plain text', async () => {
 		const { person, deps } = await setup();
-		const sent = await run(deps, person, { reply: 'què vols saber?', actions: [] });
+		const sent = await run(deps, person, { replies: [{ text: 'què vols saber?' }], actions: [] });
 		expect(sent[0]!.message.kind).toBe('text');
+	});
+
+	it('multiple bubbles send in order; any bubble can carry its control', async () => {
+		const { person, deps } = await setup();
+		const sent = await run(deps, person, {
+			replies: [
+				{ text: 'Fet, Pol! 🧡' },
+				{
+					text: 'Què vols que faci?',
+					control: { kind: 'buttons', options: [{ title: 'Al grup' }, { title: 'Res' }] }
+				},
+				{ text: 'I si tens dubtes, pregunta!' }
+			],
+			actions: []
+		});
+		expect(sent.map((s) => s.message.kind)).toEqual(['text', 'buttons', 'text']);
+		for (const s of sent) expect(validateOutMessage(s.message)).toEqual([]);
 	});
 
 	it('generated button options render as a valid interactive within WhatsApp limits', async () => {
 		const { person, deps } = await setup();
 		const sent = await run(deps, person, {
-			reply: 'Què vols que faci?',
-			actions: [],
-			control: {
-				kind: 'buttons',
-				options: [{ title: 'Afegeix-me al grup' }, { title: "Només avisa'm" }, { title: 'Res' }]
-			}
+			replies: [
+				{
+					text: 'Què vols que faci?',
+					control: {
+						kind: 'buttons',
+						options: [{ title: 'Afegeix-me al grup' }, { title: "Només avisa'm" }, { title: 'Res' }]
+					}
+				}
+			],
+			actions: []
 		});
 		const msg = sent[0]!.message as OutMessage;
 		expect(msg.kind).toBe('buttons');
@@ -135,13 +159,17 @@ describe('applyDecision — reply rendering', () => {
 	it('generated list options render as a valid list', async () => {
 		const { person, deps } = await setup();
 		const sent = await run(deps, person, {
-			reply: 'Quan et va bé?',
-			actions: [],
-			control: {
-				kind: 'list',
-				label: 'Tria quan',
-				options: [{ title: 'Dissabtes' }, { title: 'Diumenges' }]
-			}
+			replies: [
+				{
+					text: 'Quan et va bé?',
+					control: {
+						kind: 'list',
+						label: 'Tria quan',
+						options: [{ title: 'Dissabtes' }, { title: 'Diumenges' }]
+					}
+				}
+			],
+			actions: []
 		});
 		const msg = sent[0]!.message as OutMessage;
 		expect(msg.kind).toBe('list');
@@ -151,9 +179,10 @@ describe('applyDecision — reply rendering', () => {
 	it('over-long option titles are clamped so the interactive stays valid', async () => {
 		const { person, deps } = await setup();
 		const sent = await run(deps, person, {
-			reply: 'tria',
-			actions: [],
-			control: { kind: 'buttons', options: [{ title: 'x'.repeat(40) }] }
+			replies: [
+				{ text: 'tria', control: { kind: 'buttons', options: [{ title: 'x'.repeat(40) }] } }
+			],
+			actions: []
 		});
 		expect(validateOutMessage(sent[0]!.message)).toEqual([]);
 	});
@@ -161,9 +190,8 @@ describe('applyDecision — reply rendering', () => {
 	it('an all-empty control degrades to plain text', async () => {
 		const { person, deps } = await setup();
 		const sent = await run(deps, person, {
-			reply: 'hola',
-			actions: [],
-			control: { kind: 'buttons', options: [{ title: '   ' }] }
+			replies: [{ text: 'hola', control: { kind: 'buttons', options: [{ title: '   ' }] } }],
+			actions: []
 		});
 		expect(sent[0]!.message.kind).toBe('text');
 	});

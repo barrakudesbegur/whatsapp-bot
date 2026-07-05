@@ -98,7 +98,7 @@ describe('router: typing only on the decide() path', () => {
 	it('free text → typing indicator BEFORE the reply send', async () => {
 		const calls = stubFetch();
 		const h = newHarness(liveEnv());
-		enqueue(h, { reply: 'ei!', actions: [] });
+		enqueue(h, { replies: [{ text: 'ei!' }], actions: [] });
 		await text(h, WA, 'hola');
 		expect(calls.length).toBeGreaterThanOrEqual(2);
 		expect(calls[0]!.body).toMatchObject({ status: 'read', typing_indicator: { type: 'text' } });
