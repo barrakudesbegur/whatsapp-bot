@@ -11,6 +11,16 @@
  * itself — it reads the real request headers via `getRequestEvent()` and fails
  * closed. The hook gate on /admin pages is defense-in-depth.
  *
+ * ASSERTION HEADER vs COOKIE: Access injects `Cf-Access-Jwt-Assertion` only on
+ * requests routed through an Access-protected path (our app gates `/admin*`).
+ * But SvelteKit remote functions (`query`/`command`) POST to `/_app/remote/*`,
+ * which is NOT part of the Access app — so no header reaches those calls and the
+ * whole admin data layer would 403. Access ALSO carries the SAME signed JWT in
+ * the host-scoped `CF_Authorization` cookie, which the browser sends on every
+ * same-host request (including `/_app/remote/*`). So we accept either source and
+ * verify it identically — see `readAccessToken()`.
+ * Ref: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/
+ *
  * Local dev sets DEV_ACCESS_BYPASS=true in .dev.vars (there is no Access in
  * front of `vite dev`).
  */
@@ -43,6 +53,30 @@ function jwks(teamDomain: string): ReturnType<typeof createRemoteJWKSet> {
 	return resolver;
 }
 
+/** Read a single cookie value from a raw `Cookie` header. */
+function readCookie(cookieHeader: string | null, name: string): string | null {
+	if (!cookieHeader) return null;
+	for (const pair of cookieHeader.split(';')) {
+		const eq = pair.indexOf('=');
+		if (eq === -1) continue;
+		if (pair.slice(0, eq).trim() === name) return pair.slice(eq + 1).trim() || null;
+	}
+	return null;
+}
+
+/**
+ * The signed Access JWT for this request, from the assertion header when Access
+ * routed the request (the /admin page), else from the `CF_Authorization` cookie
+ * (present on same-host `/_app/remote/*` calls that bypass the Access app). Both
+ * carry an identical token, so the caller verifies it the same way.
+ */
+export function readAccessToken(request: Request): string | null {
+	return (
+		request.headers.get('cf-access-jwt-assertion') ||
+		readCookie(request.headers.get('cookie'), 'CF_Authorization')
+	);
+}
+
 /**
  * Resolve the caller's identity, or null when the request is not authorized.
  * Fails closed.
@@ -62,7 +96,7 @@ export async function verifyAccess(
 		.filter(Boolean);
 	if (!team || aud.length === 0) return null;
 
-	const token = request.headers.get('cf-access-jwt-assertion');
+	const token = readAccessToken(request);
 	if (!token) return null;
 
 	try {
