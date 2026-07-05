@@ -12,6 +12,10 @@
 	},
 	"workers_dev": true,
 	"preview_urls": true,
+	// Serve the bot via a Worker route on the existing proxied DNS record (moved
+	// here from the old Pages project). Keeps /webhook public for Meta; /admin is
+	// gated by the Cloudflare Access app.
+	"routes": [{ "pattern": "wa.barrakudesbegur.org/*", "zone_name": "barrakudesbegur.org" }],
 	"observability": {
 		"enabled": true
 	},
