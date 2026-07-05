@@ -229,6 +229,24 @@ exercised live via `wrangler dev` + the simulator (see above).
 
 ## Deploy & go-live
 
+> ⚠️ **This is a Cloudflare _Worker_, NOT a Pages project and NOT a SvelteKit
+> app.** It is a Hono Worker: the entry is `src/index.ts` and the only built
+> output is the small admin SPA in `./public/admin` (from `npm run build`).
+> `wrangler deploy` bundles the Worker and uploads `./public` as its assets.
+>
+> If you set this up as a **Pages** project it fails with
+> `Output directory ".svelte-kit/cloudflare" not found` — that path belongs to
+> the _curs-sardanes_ repo (which really is SvelteKit); this repo has no such
+> directory. **Fix:** create the Cloudflare project as a **Worker** (Workers
+> Builds), not Pages:
+>
+> | Setting                | Value                                                                 |
+> | ---------------------- | --------------------------------------------------------------------- |
+> | Type                   | **Worker** (Workers & Pages → Create → Workers → Import a repository) |
+> | Build command          | `npm run build`                                                       |
+> | Deploy command         | `npx wrangler deploy`                                                 |
+> | Build output directory | _(leave empty — this is a Pages-only field)_                          |
+
 ```bash
 npx wrangler deploy --dry-run   # validates config + build without auth
 ```
