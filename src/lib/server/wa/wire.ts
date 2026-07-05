@@ -93,6 +93,28 @@ export interface OutboundPayload {
 	interactive?: OutboundInteractive;
 }
 
+/**
+ * Mark-as-read + typing indicator payload (same /messages endpoint). Shows
+ * "typing…" for up to ~25s or until the reply arrives, and turns the inbound
+ * message's ticks blue — sent right before the model call so the person sees
+ * Kudi "thinking" instead of silence.
+ */
+export interface TypingPayload {
+	messaging_product: 'whatsapp';
+	status: 'read';
+	message_id: string;
+	typing_indicator: { type: 'text' };
+}
+
+export function toTypingPayload(inboundWaMessageId: string): TypingPayload {
+	return {
+		messaging_product: 'whatsapp',
+		status: 'read',
+		message_id: inboundWaMessageId,
+		typing_indicator: { type: 'text' }
+	};
+}
+
 type OutboundInteractive =
 	| {
 			type: 'button';

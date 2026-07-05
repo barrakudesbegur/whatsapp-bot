@@ -103,6 +103,9 @@ async function handleMessage(inbound: ParsedInbound, deps: RouterDeps): Promise<
 	}
 
 	// Everything a human says (typed text OR a tapped option's title) → the model.
+	// Mark it read + show "typing…" first, so the model's think-time reads as Kudi
+	// typing instead of silence (best-effort; no-op while WA is disabled).
+	await deps.sender.typing(inbound.message.waMessageId);
 	const userMessage = input.kind === 'text' ? input.text : input.title;
 	const tapped = input.kind !== 'text';
 	const state = await loadDecisionState(person, userMessage, tapped, {

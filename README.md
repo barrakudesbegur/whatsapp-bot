@@ -195,6 +195,12 @@ recovers JSON from prose/fences) → anything unusable → deterministic Catalan
 fallback with **no actions**. The webhook never crashes; a degraded turn never
 mutates state.
 
+While the model thinks, the person sees **"typing…"**: before each `decide()`
+call the router marks the inbound message as read (blue ticks) and sends the
+Cloud API typing indicator (`Sender.typing`, best-effort, no-op while
+`WA_ENABLED` is off; shows for up to ~25 s or until the reply lands). The
+instant fast-paths (media apology, GDPR taps) reply immediately and skip it.
+
 Compare candidate models on the real decision contract:
 `CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… node scripts/eval-catalan.ts`.
 

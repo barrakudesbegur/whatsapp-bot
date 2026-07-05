@@ -19,7 +19,7 @@ import type { AiMeta } from '../ai/decide.ts';
 import type { Store } from '../db/store.ts';
 import type { Env } from '../types.ts';
 import { nowIso } from '../time.ts';
-import { toOutboundPayload } from './wire.ts';
+import { toOutboundPayload, toTypingPayload } from './wire.ts';
 
 const GRAPH_BASE = 'https://graph.facebook.com';
 
@@ -46,6 +46,28 @@ export class Sender {
 
 	private get enabled(): boolean {
 		return this.env.WA_ENABLED === 'true';
+	}
+
+	/**
+	 * Mark an inbound message as read + show the typing indicator ("typing…",
+	 * up to ~25s or until the reply lands). Called right before the model call so
+	 * the person sees Kudi thinking instead of silence. Best-effort: a no-op while
+	 * WA is disabled, never throws, and is NOT recorded in D1 (it's a status
+	 * signal, not a message).
+	 */
+	async typing(inboundWaMessageId: string): Promise<void> {
+		if (!this.enabled) return;
+		try {
+			const res = await this.postToMeta(toTypingPayload(inboundWaMessageId));
+			if (!res.ok) {
+				console.error('WA typing indicator failed', {
+					status: res.status,
+					body: await res.text().catch(() => '')
+				});
+			}
+		} catch (err) {
+			console.error('WA typing indicator threw', err);
+		}
 	}
 
 	async send(
