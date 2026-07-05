@@ -272,6 +272,50 @@ textarea {
 	font-size: 0.66rem;
 	color: var(--muted);
 }
+/* WhatsApp-style delivery ticks on sent bubbles: grey ✓✓ → blue when seen. */
+.bubble .ticks {
+	margin-left: 0.35rem;
+	font-size: 0.7rem;
+	color: var(--muted);
+	letter-spacing: -0.15em;
+	vertical-align: bottom;
+	user-select: none;
+}
+.bubble .ticks.seen {
+	color: #53bdeb;
+}
+/* "Kudi està escrivint…" bubble with pulsing dots. */
+.bubble.typing {
+	display: inline-flex;
+	gap: 0.25rem;
+	align-items: center;
+	min-height: 1.4rem;
+}
+.bubble.typing .dot {
+	width: 0.42rem;
+	height: 0.42rem;
+	border-radius: 50%;
+	background: var(--muted);
+	animation: typing-pulse 1.2s infinite ease-in-out;
+}
+.bubble.typing .dot:nth-child(2) {
+	animation-delay: 0.2s;
+}
+.bubble.typing .dot:nth-child(3) {
+	animation-delay: 0.4s;
+}
+@keyframes typing-pulse {
+	0%,
+	60%,
+	100% {
+		opacity: 0.35;
+		transform: translateY(0);
+	}
+	30% {
+		opacity: 1;
+		transform: translateY(-0.12rem);
+	}
+}
 
 .composer {
 	position: sticky;

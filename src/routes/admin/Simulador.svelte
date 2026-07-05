@@ -11,6 +11,8 @@
 		buttons?: Opt[];
 		rows?: Opt[];
 		contextId?: string;
+		/** Sent-message ticks: ✓✓ grey → blue once Kudi has "read" it. */
+		seen?: boolean;
 	}
 	// Both derived from the simulate command's signature — no server-only import.
 	type SimArg = Parameters<typeof simulate>[0];
@@ -35,8 +37,14 @@
 		busy = true;
 		error = null;
 		chat.push({ from: 'person', text: localEcho });
+		// Mutate the PROXIED element ($state deep-proxies on push), so ticks react.
+		const sent = chat[chat.length - 1]!;
+		// Mirror the real flow: the router marks the message read (blue ticks) and
+		// shows "typing…" right before the model call.
+		const seenTimer = setTimeout(() => (sent.seen = true), 350);
 		try {
 			const { messages } = await simulate(arg);
+			sent.seen = true;
 			for (const r of messages) {
 				chat.push({
 					from: 'kudi',
@@ -48,6 +56,7 @@
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
+			clearTimeout(seenTimer);
 			busy = false;
 		}
 	}
@@ -110,7 +119,8 @@
 <div class="transcript">
 	{#each chat as item, i (i)}
 		<div class="bubble {item.from === 'person' ? 'out' : 'in'}">
-			{item.text}
+			{item.text}{#if item.from === 'person'}<span class="ticks" class:seen={item.seen}>✓✓</span
+				>{/if}
 			{#if item.buttons?.length}
 				<div class="opts">
 					{#each item.buttons as b (b.id)}
@@ -139,6 +149,11 @@
 			{/if}
 		</div>
 	{/each}
+	{#if busy}
+		<div class="bubble in typing" aria-label="En Kudi està escrivint…">
+			<span class="dot"></span><span class="dot"></span><span class="dot"></span>
+		</div>
+	{/if}
 </div>
 
 {#if error}<p class="error">{error}</p>{/if}
