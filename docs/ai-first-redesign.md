@@ -13,11 +13,11 @@ gap and a sketch of the target so it can be picked up cleanly.
 The `curs-sardanes` flow is a scripted state machine where **regex/keyword
 matching is the primary parser** and the AI is only a _fallback_:
 
-- `src/flows/curs-sardanes.ts` — `parseName()` (strips Catalan lead-ins),
+- `src/lib/server/flows/curs-sardanes.ts` — `parseName()` (strips Catalan lead-ins),
   `parseAvailability()` (keyword regex → bucket), `parseActionText()` (keyword
   regex → button id).
-- `src/lib/normalize.ts` — `parseYesNo()` and normalisation helpers.
-- `src/router.ts` — `gdprIntent()` (regex), and the routing order tries the
+- `src/lib/server/normalize.ts` — `parseYesNo()` and normalisation helpers.
+- `src/lib/server/router.ts` — `gdprIntent()` (regex), and the routing order tries the
   scripted parse first, only calling `interpretStepAnswer()` (Workers AI) when
   the regex fails.
 - Several **canned** strings (the AI stub's apology line, GDPR copy, etc.).

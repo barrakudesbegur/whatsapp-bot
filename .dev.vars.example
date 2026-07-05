@@ -1,11 +1,13 @@
 # Copy to `.dev.vars` for local development. `.dev.vars` is gitignored.
-# These are wrangler dev secrets/vars; production secrets go via `wrangler secret put`.
+# Read by the adapter platform proxy during `vite dev`; production secrets go
+# via `wrangler secret put`.
 
-# --- Local dev switches (NEVER set these in production wrangler.jsonc) ---
-# Enables POST /dev/simulate (fake inbound webhooks without Meta).
+# --- Local dev switches (NEVER set these in production) ---
+# Shows the Simulador tab and enables the simulate remote command (drive flows
+# without Meta).
 DEV_SIMULATOR=true
-# Lets /admin/api/* through without a Cloudflare Access JWT (there is no Access
-# in front of `wrangler dev`). Fails closed everywhere this is not exactly "true".
+# Bypasses the Cloudflare Access gate on /admin (there is no Access in front of
+# `vite dev`). Fails closed everywhere this is not exactly "true".
 DEV_ACCESS_BYPASS=true
 
 # --- Meta WhatsApp Cloud API (kept off locally; WA_ENABLED stays "false") ---
