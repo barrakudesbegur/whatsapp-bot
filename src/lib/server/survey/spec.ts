@@ -14,7 +14,6 @@
 import type { SignupChoice, AvailabilityBucket } from '../ai/decide.ts';
 
 export const SURVEY_ID = 'curs-sardanes';
-export const GDPR_FLOW = 'gdpr-erase';
 
 /** Collected answers, mapped to/from data_json. */
 export interface SurveyCollected {

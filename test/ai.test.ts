@@ -1,7 +1,7 @@
 /**
  * Prompt assembly + state loading: the decide() prompt carries the KB, the draft,
- * what's missing, the erasure flag and the anti-rigidity/injection rules; the
- * state loader derives everything from the store. No model involved.
+ * what's missing and the anti-rigidity/injection rules; the state loader derives
+ * everything from the store. No model involved.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -63,12 +63,15 @@ describe('buildDecideMessages', () => {
 		expect(system!.content).toContain('control'); // option generation
 	});
 
-	it('marks a tapped option and flags a pending erasure', () => {
-		const [system, user] = buildDecideMessages(
-			makeState({ userMessage: 'Dissabtes', tapped: true, erasurePending: true })
-		);
+	it('has no erasure capability — data-deletion asks are pointed to email', () => {
+		const [system] = buildDecideMessages(makeState());
+		expect(system!.content).not.toContain('erasure');
+		expect(system!.content).toContain('hola@barrakudesbegur.org');
+	});
+
+	it('marks a tapped option', () => {
+		const [, user] = buildDecideMessages(makeState({ userMessage: 'Dissabtes', tapped: true }));
 		expect(user!.content).toContain('TOCAT');
-		expect(system!.content).toContain('PENDENT DE CONFIRMAR');
 	});
 
 	it('embeds the KB', () => {
@@ -78,7 +81,7 @@ describe('buildDecideMessages', () => {
 });
 
 describe('loadDecisionState', () => {
-	it('derives draft, missing and erasurePending from the store', async () => {
+	it('derives the draft and missing fields from the store', async () => {
 		const store = new MemoryStore();
 		const person = await store.upsertPerson('34600', 'Prof', 't0');
 		await store.setDisplayName(person.id, 'Marina', 't0');
@@ -89,14 +92,6 @@ describe('loadDecisionState', () => {
 			step: null,
 			dataJson: JSON.stringify({ action: 'avisam' }),
 			createdAt: 't0'
-		});
-		await store.createFlowInstance({
-			personId: person.id,
-			flowType: 'gdpr-erase',
-			status: 'active',
-			step: null,
-			dataJson: '{}',
-			createdAt: 't1'
 		});
 		await store.upsertKbEntry({
 			slug: 'x',
@@ -123,7 +118,6 @@ describe('loadDecisionState', () => {
 		expect(state.survey.status).toBe('active');
 		expect(state.survey.collected.signup).toBe('avisam');
 		expect(state.missing).toEqual(['availability']);
-		expect(state.erasurePending).toBe(true);
 		expect(state.kb).toContain('Entrada activa');
 		expect(state.kb).not.toContain('Entrada desactivada');
 	});

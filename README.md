@@ -23,7 +23,9 @@ tapped option) triggers exactly **one** model call that returns a validated
 `Decision`: an in-voice Catalan reply, a whitelist of **actions** that code
 executes against D1, and (optionally) model-generated **tappable options**
 (buttons/list). Code — never the model — is the authority: it validates every
-action, derives survey completion, and gates the irreversible data-erasure.
+action and derives survey completion. Data deletion is deliberately NOT a chat
+capability — Kudi points people to hola@barrakudesbegur.org and an admin honors
+it from the admin panel.
 
 ```
 Meta Cloud API ──▶ src/routes/webhook/+server.ts   (public; verifies X-Hub-Signature-256
@@ -32,7 +34,6 @@ Meta Cloud API ──▶ src/routes/webhook/+server.ts   (public; verifies X-Hub
               $lib/server/router.ts (handleWebhook)
        dedupe (wa_message_id) → upsert person → route:
        · media/sticker        → deterministic apology (+ re-ask)      0 model calls
-       · gdpr_yes/gdpr_no tap → gated erase / disarm                  0 model calls
        · EVERYTHING else      → loadDecisionState → decide() ────────  1 model call
                                        │
                               Decision { reply, actions[], control? }
@@ -46,27 +47,27 @@ Browser (admin SPA) ──▶ src/routes/admin/*.remote.ts  (query/command; each
                                                         requireAdmin() → Access JWT)
 ```
 
-| Path                                      | Responsibility                                                                                                          |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `src/routes/webhook/+server.ts`           | Meta webhook: `GET` verify handshake, `POST` events (raw-body HMAC, fail closed).                                       |
-| `src/routes/admin/`                       | Admin page (`+page.svelte` tab shell) + `data.remote.ts` / `simulate.remote.ts` + CSV endpoint.                         |
-| `src/hooks.server.ts`                     | Cloudflare Access gate for `/admin` pages (fail closed; `DEV_ACCESS_BYPASS` locally).                                   |
-| `src/lib/server/router.ts`                | The AI-first pipeline above; the only deterministic branches are language-free.                                         |
-| `src/lib/server/ai/decide.ts`             | **The decision contract**: types, JSON schema, valibot validation, JSON recovery, erasure gate, deterministic fallback. |
-| `src/lib/server/ai/decide-prompt.ts`      | Builds the decide() messages: persona, draft state, actions, anti-rigidity rules, few-shot examples, KB.                |
-| `src/lib/server/ai/workers-ai-decider.ts` | Production `Decider`: Workers AI + `response_format` json_schema, low temperature, degradation ladder.                  |
-| `src/lib/server/ai/scripted-decider.ts`   | Deterministic `Decider` for tests (enqueue decisions; counts calls).                                                    |
-| `src/lib/server/ai/prompt.ts`             | `buildKbBlock` — folds static KB + `kb_entries` + course status + live agenda.                                          |
-| `src/lib/server/survey/spec.ts`           | Declarative survey field spec + pure `deriveMissing` / `deriveStatus` (code owns completion).                           |
-| `src/lib/server/survey/apply.ts`          | Executes a Decision: D1 writes per action, erasure double-gate, reply/control rendering.                                |
-| `src/lib/server/survey/state.ts`          | Assembles the per-turn `DecisionState` (draft, missing fields, erasure flag, KB, transcript).                           |
-| `src/lib/server/wa/`                      | `wire.ts` (Cloud API payloads), `parse.ts` (webhook→events), `sender.ts`, `simulate.ts`.                                |
-| `src/lib/server/db/`                      | `store.ts` (interface), `d1.ts` (production), `memory.ts` (in-memory fake for tests).                                   |
-| `src/lib/server/kb/`                      | Static `*.md` (imported via Vite `?raw`) + the live agenda feed (`events.ts`).                                          |
-| `src/lib/server/access.ts`                | Cloudflare Access JWT verification + `requireAdmin()` (the guard for remote functions).                                 |
-| `src/lib/server/signature.ts`             | `X-Hub-Signature-256` HMAC-SHA256 verification (real WebCrypto).                                                        |
-| `scripts/chat.ts`                         | **CLI chat simulator** — talk to Kudi from the terminal (see below).                                                    |
-| `migrations/`                             | D1 schema + indexes + `settings` seed.                                                                                  |
+| Path                                      | Responsibility                                                                                            |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `src/routes/webhook/+server.ts`           | Meta webhook: `GET` verify handshake, `POST` events (raw-body HMAC, fail closed).                         |
+| `src/routes/admin/`                       | Admin page (`+page.svelte` tab shell) + `data.remote.ts` / `simulate.remote.ts` + CSV endpoint.           |
+| `src/hooks.server.ts`                     | Cloudflare Access gate for `/admin` pages (fail closed; `DEV_ACCESS_BYPASS` locally).                     |
+| `src/lib/server/router.ts`                | The AI-first pipeline above; the only deterministic branches are language-free.                           |
+| `src/lib/server/ai/decide.ts`             | **The decision contract**: types, JSON schema, valibot validation, JSON recovery, deterministic fallback. |
+| `src/lib/server/ai/decide-prompt.ts`      | Builds the decide() messages: persona, draft state, actions, anti-rigidity rules, few-shot examples, KB.  |
+| `src/lib/server/ai/workers-ai-decider.ts` | Production `Decider`: Workers AI + `response_format` json_schema, low temperature, degradation ladder.    |
+| `src/lib/server/ai/scripted-decider.ts`   | Deterministic `Decider` for tests (enqueue decisions; counts calls).                                      |
+| `src/lib/server/ai/prompt.ts`             | `buildKbBlock` — folds static KB + `kb_entries` + course status + live agenda.                            |
+| `src/lib/server/survey/spec.ts`           | Declarative survey field spec + pure `deriveMissing` / `deriveStatus` (code owns completion).             |
+| `src/lib/server/survey/apply.ts`          | Executes a Decision: D1 writes per action, code-derived completion, reply/control rendering.              |
+| `src/lib/server/survey/state.ts`          | Assembles the per-turn `DecisionState` (draft, missing fields, KB, transcript).                           |
+| `src/lib/server/wa/`                      | `wire.ts` (Cloud API payloads), `parse.ts` (webhook→events), `sender.ts`, `simulate.ts`.                  |
+| `src/lib/server/db/`                      | `store.ts` (interface), `d1.ts` (production), `memory.ts` (in-memory fake for tests).                     |
+| `src/lib/server/kb/`                      | Static `*.md` (imported via Vite `?raw`) + the live agenda feed (`events.ts`).                            |
+| `src/lib/server/access.ts`                | Cloudflare Access JWT verification + `requireAdmin()` (the guard for remote functions).                   |
+| `src/lib/server/signature.ts`             | `X-Hub-Signature-256` HMAC-SHA256 verification (real WebCrypto).                                          |
+| `scripts/chat.ts`                         | **CLI chat simulator** — talk to Kudi from the terminal (see below).                                      |
+| `migrations/`                             | D1 schema + indexes + `settings` seed.                                                                    |
 
 **Why SvelteKit** (and not the previous Hono + Vite-SPA): one consistent stack,
 and the admin's hand-written JSON API + fetch client is replaced by type-safe
@@ -91,12 +92,12 @@ action writes are idempotent set-semantics — replays can't double-apply.
 `decide(state) → { reply, actions[], control? }` — one call per message.
 
 - **State in** (`survey/state.ts`): who the person is, the submission **draft**
-  (collected answers + which fields are still `missing`), whether an erasure is
-  pending confirmation, the KB, and a short transcript.
+  (collected answers + which fields are still `missing`), the KB, and a short
+  transcript.
 - **Actions out** (whitelisted; anything else is dropped by valibot validation):
   `set_display_name`, `record_signup(grup|avisam|res)`,
   `record_availability(bucket, note?)`, `start_survey`, `restart_survey`,
-  `decline_survey`, `initiate_erasure`, `confirm_erasure`, `cancel_erasure`.
+  `decline_survey`.
 - **Control out** (optional): the model may generate tappable options —
   `{kind:'buttons'|'list', options:[{title,…}]}`. Code assigns ids, clamps
   titles, and validates against WhatsApp interactive limits (falls back to plain
@@ -111,10 +112,10 @@ action writes are idempotent set-semantics — replays can't double-apply.
 
 1. _A degraded turn never mutates._ Model error/timeout/garbage → deterministic
    fallback reply with `actions: []`.
-2. _A single message can never erase data._ `confirm_erasure` only works when an
-   erasure was **armed on a prior turn** (`initiate_erasure` → active
-   `gdpr-erase` row); the confirm buttons (`gdpr_yes`/`gdpr_no`) are the one
-   deterministic interactive.
+2. _The chat can never erase data._ There is no deletion action at all: someone
+   asking to be erased is pointed to **hola@barrakudesbegur.org**, and an admin
+   honors it from the admin panel (`Store.anonymizePerson`). Even a jailbroken
+   model output cannot delete — the action simply does not exist.
 3. _User text is data, not instructions._ Actions are validated against the
    whitelist; they carry no target (always the current sender), so cross-user
    effects are impossible.
@@ -199,7 +200,7 @@ While the model thinks, the person sees **"typing…"**: before each `decide()`
 call the router marks the inbound message as read (blue ticks) and sends the
 Cloud API typing indicator (`Sender.typing`, best-effort, no-op while
 `WA_ENABLED` is off; shows for up to ~25 s or until the reply lands). The
-instant fast-paths (media apology, GDPR taps) reply immediately and skip it.
+instant media fast-path replies immediately and skips it.
 
 Compare candidate models on the real decision contract:
 `CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… node scripts/eval-catalan.ts`.
@@ -217,8 +218,8 @@ transitions and applied actions — never on model-authored copy): the decision
 contract (JSON recovery, whitelist validation), action application (each action
 → the right D1 write, code-derived completion), router dispatch with recorded
 webhook fixtures, duplicate-replay dedupe, the one-model-call budget and
-zero-call fast-paths, the erasure double-gate (single-message bypass provably
-blocked), and the degradation ladder with a mocked AI binding. The SvelteKit
+zero-call fast-paths, the no-deletion guarantee (hallucinated erasure actions
+are dropped), and the degradation ladder with a mocked AI binding. The SvelteKit
 surface is verified via the dev server + Playwright; live conversations via
 `npm run chat`.
 

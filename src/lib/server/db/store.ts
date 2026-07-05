@@ -93,7 +93,10 @@ export interface Store {
 	getPersonByWaId(waId: string): Promise<PersonRow | null>;
 	getPerson(id: number): Promise<PersonRow | null>;
 	setDisplayName(personId: number, name: string, at: string): Promise<void>;
-	/** GDPR erase: flag + scrub the person row and delete their messages. */
+	/**
+	 * GDPR erase: flag + scrub the person row and delete their messages. Admin-only
+	 * (data.remote.ts) — people who ask in the chat are pointed to email instead.
+	 */
 	anonymizePerson(personId: number, at: string): Promise<void>;
 
 	// Messages
@@ -109,7 +112,7 @@ export interface Store {
 	): Promise<boolean>;
 
 	// Flow instances (the per-person, per-flow submission draft).
-	/** The latest instance of `flowType` for a person (survey draft / erasure request). */
+	/** The latest instance of `flowType` for a person (their survey draft). */
 	getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null>;
 	createFlowInstance(input: CreateFlowInput): Promise<FlowInstanceRow>;
 	/** Update a draft's status/step/data/timestamps (completed_at is COALESCE-preserved). */

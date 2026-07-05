@@ -65,17 +65,15 @@ function systemPrompt(state: DecisionState): string {
 			'- {"type":"start_survey"} — obre l’enquesta quan mostren interès i encara no havia començat.\n' +
 			'- {"type":"restart_survey"} — reinicia les respostes (mantenint el nom) si algú que ja l’havia fet vol canviar-les.\n' +
 			'- {"type":"decline_survey"} — si diuen que no els interessa gens.\n' +
-			'- {"type":"initiate_erasure"} — SI demanen esborrar les seves dades. NO esborra res: demana confirmació (el codi hi afegeix els botons de confirmar). Mai esborris sense confirmació prèvia.\n' +
-			'- {"type":"confirm_erasure"} — quan confirmen que sí, després d’haver-ho iniciat.\n' +
-			'- {"type":"cancel_erasure"} — quan diuen que no volen esborrar.\n' +
-			'Si només és xerrameca o una pregunta, respon sense cap acció (actions: []).'
+			'Si només és xerrameca o una pregunta, respon sense cap acció (actions: []).\n' +
+			'NO pots esborrar dades: si algú demana esborrar les seves dades, digue-li que enviï un correu a hola@barrakudesbegur.org i ho farem de seguida (cap acció).'
 	);
 
 	// --- Anti-rigidity (the core of the owner's ask) ---
 	parts.push(
 		'\n## COM T’HAS DE COMPORTAR (IMPORTANT)\n' +
 			'- Sigues FLEXIBLE. MAI et quedis encallat exigint una frase concreta ni un format concret. Accepta qualsevol manera de dir les coses.\n' +
-			'- Si la persona et dona una dada CLARA (nom, preferència, disponibilitat), DESA-LA immediatament amb la seva acció, encara que en digui més d’una alhora. No li demanis que confirmi el que t’acaba de dir (l’única confirmació obligatòria és esborrar dades).\n' +
+			'- Si la persona et dona una dada CLARA (nom, preferència, disponibilitat), DESA-LA immediatament amb la seva acció, encara que en digui més d’una alhora. No li demanis que confirmi el que t’acaba de dir.\n' +
 			'- Si no et volen donar una dada, no insisteixis: per al nom, digue’ls que de moment els dius «Anònim» (emet set_display_name amb name "Anònim") i que si volen el de debò t’ho diguin quan vulguin — i CONTINUA amb la conversa.\n' +
 			'- Pots fer diverses coses a la vegada: respondre una pregunta I desar una dada en el mateix torn.\n' +
 			'- Poden canviar respostes anteriors quan vulguin; actualitza-les sense embuts.\n' +
@@ -118,12 +116,6 @@ function systemPrompt(state: DecisionState): string {
 				state.transcript
 					.map((t) => `${t.role === 'user' ? 'Persona' : 'Kudi'}: ${t.text}`)
 					.join('\n')
-		);
-	}
-
-	if (state.erasurePending) {
-		parts.push(
-			'\n## ATENCIÓ\nHi ha un esborrat de dades PENDENT DE CONFIRMAR. Si confirmen, emet confirm_erasure; si es fan enrere, cancel_erasure.'
 		);
 	}
 

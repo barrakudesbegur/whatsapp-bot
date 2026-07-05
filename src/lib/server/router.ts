@@ -8,9 +8,10 @@
  *
  * The only non-model paths are deterministic and language-free:
  *   - webhook dedupe on wa_message_id (idempotency);
- *   - unsupported media/audio/sticker → a short apology (nothing to understand);
- *   - the destructive GDPR confirm button tap → the irreversible delete is gated
- *     behind a prior armed request, so a single message can never erase data.
+ *   - unsupported media/audio/sticker → a short apology (nothing to understand).
+ *
+ * Data deletion is not a chat capability: Kudi points people to
+ * hola@barrakudesbegur.org and an admin honors it from the admin panel.
  *
  * The webhook always 200s (see webhook/+server.ts); the sender records every
  * outbound and degrades to a no-op when WA is disabled.
@@ -24,16 +25,8 @@ import { parseWebhook, type ParsedInbound } from './wa/parse.ts';
 import type { WebhookEnvelope, StatusUpdate } from './wa/wire.ts';
 import { Sender, type SentMessage } from './wa/sender.ts';
 import { loadDecisionState } from './survey/state.ts';
-import {
-	applyDecision,
-	performErasure,
-	cancelErasure,
-	GDPR_DONE,
-	GDPR_KEPT,
-	GDPR_YES,
-	GDPR_NO
-} from './survey/apply.ts';
-import { SURVEY_ID, GDPR_FLOW, parseCollected, deriveMissing } from './survey/spec.ts';
+import { applyDecision } from './survey/apply.ts';
+import { SURVEY_ID, parseCollected, deriveMissing } from './survey/spec.ts';
 import { missingFieldNudge } from './ai/decide.ts';
 import { nowIso } from './time.ts';
 
@@ -95,13 +88,6 @@ async function handleMessage(inbound: ParsedInbound, deps: RouterDeps): Promise<
 	// Media / audio / sticker: nothing to understand — apologize (+ nudge if mid-survey).
 	if (input.kind === 'unsupported') return handleUnsupported(person, deps);
 
-	// The one deterministic interactive: the destructive erasure confirmation.
-	if (input.kind === 'button' && (input.id === GDPR_YES || input.id === GDPR_NO)) {
-		const handled = await handleGdprTap(person, input.id, deps);
-		if (handled) return handled;
-		// Stale tap with nothing armed → fall through and let the model handle it.
-	}
-
 	// Everything a human says (typed text OR a tapped option's title) → the model.
 	// Mark it read + show "typing…" first, so the model's think-time reads as Kudi
 	// typing instead of silence (best-effort; no-op while WA is disabled).
@@ -126,18 +112,4 @@ async function handleUnsupported(person: PersonRow, deps: RouterDeps): Promise<S
 		if (missing[0]) messages.push({ kind: 'text', body: missingFieldNudge(missing[0]) });
 	}
 	return deps.sender.send(person, messages, { flowInstanceId: survey?.id ?? null });
-}
-
-/** Returns the sent messages when an erasure was armed, or null for a stale tap. */
-async function handleGdprTap(
-	person: PersonRow,
-	id: string,
-	deps: RouterDeps
-): Promise<SentMessage[] | null> {
-	const gdpr = await deps.store.getLatestFlowInstance(person.id, GDPR_FLOW);
-	if (gdpr?.status !== 'active') return null;
-	const now = nowIso();
-	return id === GDPR_YES
-		? performErasure(person, gdpr.id, deps, GDPR_DONE, now)
-		: cancelErasure(person, gdpr.id, deps, GDPR_KEPT, now);
 }

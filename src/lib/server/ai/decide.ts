@@ -50,10 +50,10 @@ export type Action =
 	| { type: 'record_availability'; bucket: AvailabilityBucket; note?: string }
 	| { type: 'start_survey' }
 	| { type: 'restart_survey' }
-	| { type: 'decline_survey' }
-	| { type: 'initiate_erasure' }
-	| { type: 'confirm_erasure' }
-	| { type: 'cancel_erasure' };
+	| { type: 'decline_survey' };
+// Data deletion is deliberately NOT a chat capability: people who want their
+// data erased are told to email hola@barrakudesbegur.org (see decide-prompt.ts);
+// an admin honors it manually (Store.anonymizePerson).
 
 export type ActionType = Action['type'];
 
@@ -93,9 +93,6 @@ export interface DecisionState {
 	};
 	/** Fields still worth asking for, in ask order. Derived, handed to the model as data. */
 	missing: ('name' | 'signup' | 'availability')[];
-	/** True when a data-erasure was ARMED on a PRIOR turn (the delete gate). */
-	erasurePending: boolean;
-	erasureInstanceId: number | null;
 	course: { status: string; note: string };
 	/** Assembled knowledge block (static KB + active entries + live events). */
 	kb: string;
@@ -143,10 +140,7 @@ export const DECISION_JSON_SCHEMA = {
 							'record_availability',
 							'start_survey',
 							'restart_survey',
-							'decline_survey',
-							'initiate_erasure',
-							'confirm_erasure',
-							'cancel_erasure'
+							'decline_survey'
 						]
 					},
 					name: { type: 'string', maxLength: 40 },
@@ -200,10 +194,7 @@ const ActionSchema = v.variant('type', [
 	}),
 	v.object({ type: v.literal('start_survey') }),
 	v.object({ type: v.literal('restart_survey') }),
-	v.object({ type: v.literal('decline_survey') }),
-	v.object({ type: v.literal('initiate_erasure') }),
-	v.object({ type: v.literal('confirm_erasure') }),
-	v.object({ type: v.literal('cancel_erasure') })
+	v.object({ type: v.literal('decline_survey') })
 ]);
 
 /**
@@ -301,16 +292,6 @@ export function extractJson(raw: string): unknown {
 		}
 	}
 	return null;
-}
-
-/** Whether a delete may proceed: only if erasure was armed on a PRIOR turn. */
-export function mayDelete(
-	state: Pick<DecisionState, 'erasurePending'>,
-	opts: { tapYes?: boolean; decision?: Decision }
-): boolean {
-	if (!state.erasurePending) return false;
-	if (opts.tapYes) return true;
-	return opts.decision?.actions.some((a) => a.type === 'confirm_erasure') ?? false;
 }
 
 /** Short deterministic re-ask for a missing survey field (fallback + media path). */

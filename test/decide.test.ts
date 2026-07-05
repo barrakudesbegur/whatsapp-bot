@@ -1,13 +1,12 @@
 /**
- * The decision contract's pure core: JSON recovery, whitelist validation, the
- * erasure gate, and the deterministic fallback. No model, no store.
+ * The decision contract's pure core: JSON recovery, whitelist validation, and
+ * the deterministic fallback. No model, no store.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
 	parseDecision,
 	extractJson,
-	mayDelete,
 	fallbackDecision,
 	DECISION_JSON_SCHEMA
 } from '../src/lib/server/ai/decide.ts';
@@ -101,18 +100,21 @@ describe('parseDecision', () => {
 	});
 });
 
-describe('mayDelete (erasure gate)', () => {
-	const armed = { erasurePending: true };
-	const notArmed = { erasurePending: false };
-	const confirm = { reply: 'x', actions: [{ type: 'confirm_erasure' as const }] };
-	const none = { reply: 'x', actions: [] };
-
-	it('only deletes when armed on a prior turn AND a confirm signal is present', () => {
-		expect(mayDelete(armed, { decision: confirm })).toBe(true);
-		expect(mayDelete(armed, { tapYes: true })).toBe(true);
-		expect(mayDelete(notArmed, { decision: confirm })).toBe(false); // single-message bypass blocked
-		expect(mayDelete(notArmed, { tapYes: true })).toBe(false);
-		expect(mayDelete(armed, { decision: none })).toBe(false); // armed but no confirm
+describe('erasure is NOT a chat capability', () => {
+	it('drops any erasure-like action the model might hallucinate', () => {
+		const d = parseDecision(
+			JSON.stringify({
+				reply: 'esborro les teves dades ara mateix',
+				actions: [
+					{ type: 'confirm_erasure' },
+					{ type: 'initiate_erasure' },
+					{ type: 'erase_data' },
+					{ type: 'record_signup', choice: 'grup' }
+				]
+			})
+		);
+		// Only the whitelisted survey action survives; deletion can never execute.
+		expect(d?.actions).toEqual([{ type: 'record_signup', choice: 'grup' }]);
 	});
 });
 
@@ -154,7 +156,8 @@ describe('DECISION_JSON_SCHEMA', () => {
 		const types: readonly string[] =
 			DECISION_JSON_SCHEMA.properties.actions.items.properties.type.enum;
 		expect(types).toContain('set_display_name');
-		expect(types).toContain('confirm_erasure');
+		expect(types).toContain('record_availability');
+		expect(types).not.toContain('confirm_erasure'); // deletion is email-only, never chat
 		expect(types).not.toContain('teleport');
 	});
 });

@@ -2,7 +2,7 @@
  * Deterministic Decider for unit tests. Enqueue the decision(s) a test expects
  * (a fixed Decision or a `(state) => Decision` function); `calls` counts how many
  * times decide() ran, so tests can assert the one-call budget and that the
- * fast-paths (media apology, GDPR tap) make ZERO model calls. No network.
+ * fast-paths (media apology, webhook dedupe) make ZERO model calls. No network.
  */
 
 import {

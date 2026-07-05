@@ -6,9 +6,9 @@
 import type { InboundMessage, StatusUpdate, WebhookEnvelope } from './wire.ts';
 
 /**
- * Normalized inbound the router understands. A tapped button/list carries its id
- * (needed only for the GDPR confirm fast-path) and its title (fed to the model as
- * the user's message — a tap is understood exactly like typed free text).
+ * Normalized inbound the router understands. A tapped button/list carries its
+ * title, which is fed to the model as the user's message — a tap is understood
+ * exactly like typed free text.
  */
 export type InboundInput =
 	| { kind: 'text'; text: string }

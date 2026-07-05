@@ -1,8 +1,8 @@
 /**
  * Typing indicator: the mark-read + "typing…" signal sent right before the model
  * call. Verifies the wire payload, the Sender's no-op/never-throw behaviour, and
- * that the router only shows typing on the decide() path (fast paths reply
- * instantly and stay silent).
+ * that the router only shows typing on the decide() path (the media fast path
+ * replies instantly and stays silent).
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

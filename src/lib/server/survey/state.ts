@@ -1,7 +1,7 @@
 /**
  * Assembles the `DecisionState` handed to the model each turn: what Kudi knows
- * about this person and their submission draft, the erasure-armed flag (the delete
- * gate), the knowledge base, and a short transcript. Reads only — never mutates.
+ * about this person and their submission draft, the knowledge base, and a short
+ * transcript. Reads only — never mutates.
  */
 
 import type { Store, MessageRow } from '../db/store.ts';
@@ -10,7 +10,7 @@ import type { DecisionState } from '../ai/decide.ts';
 import { buildKbBlock } from '../ai/prompt.ts';
 import { STATIC_KB } from '../kb/static.ts';
 import { fetchEventsSection } from '../kb/events.ts';
-import { SURVEY_ID, GDPR_FLOW, parseCollected, deriveMissing, type SurveyStatus } from './spec.ts';
+import { SURVEY_ID, parseCollected, deriveMissing, type SurveyStatus } from './spec.ts';
 import { nowIso } from '../time.ts';
 
 export interface StateDeps {
@@ -26,16 +26,14 @@ export async function loadDecisionState(
 ): Promise<DecisionState> {
 	const { store, env } = deps;
 
-	const [surveyRow, gdprRow, kbEntries, courseStatus, courseNote, events, messages] =
-		await Promise.all([
-			store.getLatestFlowInstance(person.id, SURVEY_ID),
-			store.getLatestFlowInstance(person.id, GDPR_FLOW),
-			store.listKbEntries(true),
-			store.getSetting('course_status'),
-			store.getSetting('course_status_note'),
-			fetchEventsSection(env),
-			store.listMessagesForPerson(person.id)
-		]);
+	const [surveyRow, kbEntries, courseStatus, courseNote, events, messages] = await Promise.all([
+		store.getLatestFlowInstance(person.id, SURVEY_ID),
+		store.listKbEntries(true),
+		store.getSetting('course_status'),
+		store.getSetting('course_status_note'),
+		fetchEventsSection(env),
+		store.listMessagesForPerson(person.id)
+	]);
 
 	const collected = parseCollected(surveyRow?.data_json);
 	const status: SurveyStatus = !surveyRow
@@ -63,8 +61,6 @@ export async function loadDecisionState(
 		},
 		survey: { status, collected, instanceId: surveyRow?.id ?? null },
 		missing: deriveMissing(collected, person.display_name),
-		erasurePending: gdprRow?.status === 'active',
-		erasureInstanceId: gdprRow?.id ?? null,
 		course: { status: courseStatus ?? 'exploring', note: courseNote ?? '' },
 		kb,
 		transcript: buildTranscript(messages, userMessage),

@@ -91,8 +91,6 @@ export function makeState(over: Partial<DecisionState> = {}): DecisionState {
 			instanceId: null
 		},
 		missing: ['name', 'signup', 'availability'],
-		erasurePending: false,
-		erasureInstanceId: null,
 		course: { status: 'exploring', note: '' },
 		kb: 'KB',
 		transcript: [],
