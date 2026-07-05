@@ -69,6 +69,16 @@ describe('buildDecideMessages', () => {
 		expect(system!.content).toContain('hola@barrakudesbegur.org');
 	});
 
+	it('never frames Kudi as a "bot" — acts human, discloses as IA', () => {
+		const [system] = buildDecideMessages(makeState({ kb: 'KB' }));
+		expect(system!.content).toContain('NO diguis MAI que ets un «bot»');
+		expect(system!.content).toContain('IA (intel·ligència artificial)');
+		// The word must not appear as a self-description anywhere else in the
+		// prompt ("botó" = button is fine; the rule itself quotes «bot»).
+		const selfDescriptions = system!.content.match(/(?:el|un) bot(?!\p{L}|»)/gu) ?? [];
+		expect(selfDescriptions).toEqual([]);
+	});
+
 	it('lists active campaigns with a soft-steering rule', () => {
 		const [system] = buildDecideMessages(
 			makeState({
