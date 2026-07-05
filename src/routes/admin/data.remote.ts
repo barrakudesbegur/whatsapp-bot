@@ -31,6 +31,7 @@ export const conversations = query(async () => {
 		name: cv.person.display_name || cv.person.profile_name || cv.person.wa_id,
 		waId: cv.person.wa_id,
 		gdprDeleted: cv.person.gdpr_deleted === 1,
+		isTest: cv.person.is_test === 1,
 		lastMessageAt: cv.lastMessageAt,
 		windowOpen: windowOpen(cv.person.last_inbound_at),
 		flowStatus: cv.flowStatus,
@@ -50,6 +51,7 @@ export const conversation = query(v.number(), async (id) => {
 			name: person.display_name || person.profile_name || person.wa_id,
 			waId: person.wa_id,
 			gdprDeleted: person.gdpr_deleted === 1,
+			isTest: person.is_test === 1,
 			windowOpen: windowOpen(person.last_inbound_at)
 		},
 		messages: rows.map(renderMessage)

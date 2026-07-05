@@ -62,7 +62,8 @@ export class MemoryStore implements Store {
 			display_name: null,
 			created_at: at,
 			last_inbound_at: at,
-			gdpr_deleted: 0
+			gdpr_deleted: 0,
+			is_test: 0
 		};
 		this.people.push(row);
 		return { ...row };
@@ -84,6 +85,11 @@ export class MemoryStore implements Store {
 			p.display_name = name;
 			p.last_inbound_at ??= at;
 		}
+	}
+
+	async markPersonTest(personId: number): Promise<void> {
+		const p = this.people.find((p) => p.id === personId);
+		if (p) p.is_test = 1;
 	}
 
 	async anonymizePerson(personId: number, at: string): Promise<void> {
@@ -306,6 +312,7 @@ export class MemoryStore implements Store {
 	async exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]> {
 		return this.flows
 			.filter((f) => f.flow_type === flowType && f.status === 'completed')
+			.filter((f) => this.people.find((p) => p.id === f.person_id)?.is_test !== 1)
 			.sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? '') || b.id - a.id)
 			.map((f) => {
 				const p = this.people.find((p) => p.id === f.person_id);

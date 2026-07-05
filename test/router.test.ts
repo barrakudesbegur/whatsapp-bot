@@ -248,6 +248,32 @@ describe('status webhooks', () => {
 	});
 });
 
+describe('test-data flagging', () => {
+	it('a simulator envelope marks the person as test; real envelopes do not', async () => {
+		const h = newHarness();
+		enqueue(h, { replies: [{ text: 'ei' }], actions: [] });
+		await text(h, WA, 'hola'); // simulate() → phone_number_id SIMULATOR
+		expect((await h.store.getPersonByWaId(WA))?.is_test).toBe(1);
+
+		enqueue(h, { replies: [{ text: 'ei' }], actions: [] });
+		await runWebhook(h, rawText('34600999888', 'wamid.REAL', 'hola')); // phone_number_id PN
+		expect((await h.store.getPersonByWaId('34600999888'))?.is_test).toBe(0);
+	});
+
+	it('test people are excluded from the CSV export', async () => {
+		const h = newHarness();
+		enqueue(h, {
+			replies: [{ text: 'fet' }],
+			actions: [
+				{ type: 'record_signup', choice: 'grup' },
+				{ type: 'record_availability', bucket: 'dissabtes' }
+			]
+		});
+		await text(h, WA, "apunta'm, dissabtes"); // completes as a TEST person
+		expect(await h.store.exportCompletedFlows('curs-sardanes')).toEqual([]);
+	});
+});
+
 describe('degradation: an empty decider queue falls back without mutating', () => {
 	it('replies deterministically and applies no side effects', async () => {
 		const h = newHarness();

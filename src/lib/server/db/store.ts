@@ -19,6 +19,8 @@ export interface PersonRow {
 	created_at: string;
 	last_inbound_at: string | null;
 	gdpr_deleted: number;
+	/** 1 = simulator-driven person (admin Simulador / chat CLI), not a real user. */
+	is_test: number;
 }
 
 export type FlowStatusRow = 'active' | 'completed' | 'abandoned' | 'declined';
@@ -98,6 +100,8 @@ export interface Store {
 	 * (data.remote.ts) — people who ask in the chat are pointed to email instead.
 	 */
 	anonymizePerson(personId: number, at: string): Promise<void>;
+	/** Flag a person as simulator-driven test data (idempotent). */
+	markPersonTest(personId: number): Promise<void>;
 
 	// Messages
 	/** Returns false when the wa_message_id already existed (retry → ignore). */

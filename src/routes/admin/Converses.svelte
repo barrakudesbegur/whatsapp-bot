@@ -8,6 +8,8 @@
 	let draft = $state('');
 	let sending = $state(false);
 	let actionError = $state<string | null>(null);
+	// Hide simulator-driven (test) conversations from the list.
+	let hideTests = $state(false);
 
 	function fmtTime(iso: string | null): string {
 		if (!iso) return '';
@@ -47,13 +49,22 @@
 </script>
 
 {#if openId === null}
+	{@const all = await conversations()}
+	{@const visible = hideTests ? all.filter((c) => !c.isTest) : all}
 	<div class="toolbar">
 		<a class="btn small" href={resolve('/admin/export/curs-sardanes.csv')}>Exporta CSV</a>
+		{#if all.some((c) => c.isTest)}
+			<label class="row" style="font-weight:400;margin-left:auto">
+				<input type="checkbox" bind:checked={hideTests} />
+				Amaga proves ({all.filter((c) => c.isTest).length})
+			</label>
+		{/if}
 	</div>
-	{#each await conversations() as c (c.id)}
+	{#each visible as c (c.id)}
 		<button class="list-item" onclick={() => (openId = c.id)}>
 			<div class="row">
 				<span class="name">{c.name}</span>
+				{#if c.isTest}<span class="badge off">test</span>{/if}
 				{#if c.flowStatus}<span class="badge {c.flowStatus}">{c.flowStatus}</span>{/if}
 				{#if c.gdprDeleted}<span class="badge off">esborrat</span>{/if}
 				<span class="preview" style="margin-left:auto">{fmtTime(c.lastMessageAt)}</span>
@@ -61,7 +72,11 @@
 		</button>
 	{:else}
 		<div class="card">
-			<p class="muted">Encara no hi ha cap conversa. Prova el simulador! 💬</p>
+			<p class="muted">
+				{hideTests && all.length > 0
+					? 'Només hi ha converses de prova (amagades).'
+					: 'Encara no hi ha cap conversa. Prova el simulador! 💬'}
+			</p>
 		</div>
 	{/each}
 {/if}
@@ -72,6 +87,7 @@
 
 	<div class="row" style="margin-bottom:0.4rem">
 		<h2 style="font-size:1.3rem">{detail.person.name}</h2>
+		{#if detail.person.isTest}<span class="badge off">test</span>{/if}
 		<button
 			class="btn danger"
 			style="margin-left:auto"

@@ -32,6 +32,11 @@ import { nowIso } from './time.ts';
 
 const UNSUPPORTED = 'Ho sento, només sé llegir text 😅';
 
+// Inbounds whose envelope carries one of these phone_number_ids come from a
+// simulator (admin Simulador tab / chat CLI), not real WhatsApp — the person
+// gets flagged is_test so the admin can tell test data apart and filter it.
+const TEST_PHONE_NUMBER_IDS = new Set(['SIMULATOR', 'CHAT_CLI']);
+
 export interface RouterDeps {
 	env: Env;
 	store: Store;
@@ -72,6 +77,11 @@ async function handleMessage(inbound: ParsedInbound, deps: RouterDeps): Promise<
 	const { store } = deps;
 	const now = nowIso();
 	const person = await store.upsertPerson(inbound.waId, inbound.profileName ?? null, now);
+
+	// Simulator-driven person → flag as test data (idempotent, admin-visible).
+	if (inbound.phoneNumberId && TEST_PHONE_NUMBER_IDS.has(inbound.phoneNumberId)) {
+		if (person.is_test !== 1) await store.markPersonTest(person.id);
+	}
 
 	// Dedupe webhook retries / out-of-order deliveries (atomic on wa_message_id).
 	const fresh = await store.insertInboundMessage({

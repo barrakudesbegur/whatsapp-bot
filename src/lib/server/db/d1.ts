@@ -61,6 +61,10 @@ export class D1Store implements Store {
 			.run();
 	}
 
+	async markPersonTest(personId: number): Promise<void> {
+		await this.db.prepare(`UPDATE people SET is_test = 1 WHERE id = ?1`).bind(personId).run();
+	}
+
 	async anonymizePerson(personId: number, at: string): Promise<void> {
 		await this.db.batch([
 			this.db.prepare(`DELETE FROM messages WHERE person_id = ?1`).bind(personId),
@@ -318,7 +322,7 @@ export class D1Store implements Store {
                 f.data_json, f.completed_at
            FROM flow_instances f
            JOIN people p ON p.id = f.person_id
-          WHERE f.flow_type = ?1 AND f.status = 'completed'
+          WHERE f.flow_type = ?1 AND f.status = 'completed' AND p.is_test = 0
           ORDER BY f.completed_at DESC, f.id DESC`
 			)
 			.bind(flowType)
