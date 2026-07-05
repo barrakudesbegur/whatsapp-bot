@@ -6,9 +6,9 @@
  * only on this interface, so flow logic is exercised without a live D1 while the
  * real store is driven end-to-end via `wrangler dev` + the simulator.
  *
- * Concurrency: `insertInboundMessage` dedupes on wa_message_id (webhook retries);
- * `updateFlowStep` is an optimistic compare-and-set on the current step (two
- * concurrent webhook invocations can't both advance the same flow).
+ * Concurrency: `insertInboundMessage` dedupes on wa_message_id — an atomic UNIQUE
+ * guard (webhook retries / double-delivery process a message at most once). Action
+ * writes are idempotent set-semantics, so no per-step compare-and-set is needed.
  */
 
 export interface PersonRow {
@@ -108,19 +108,12 @@ export interface Store {
 		at: string
 	): Promise<boolean>;
 
-	// Flow instances
-	getFlowInstance(id: number): Promise<FlowInstanceRow | null>;
-	getActiveFlowInstance(personId: number): Promise<FlowInstanceRow | null>;
+	// Flow instances (the per-person, per-flow submission draft).
+	/** The latest instance of `flowType` for a person (survey draft / erasure request). */
 	getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null>;
 	createFlowInstance(input: CreateFlowInput): Promise<FlowInstanceRow>;
-	/** Unconditional update (start/resume/returning). */
+	/** Update a draft's status/step/data/timestamps (completed_at is COALESCE-preserved). */
 	updateFlowInstance(id: number, input: UpdateFlowInput): Promise<void>;
-	/**
-	 * Optimistic compare-and-set: only writes when the row's current step still
-	 * equals `expectedStep`. Returns false when 0 rows matched (another
-	 * invocation already advanced the flow — caller must NOT send).
-	 */
-	updateFlowStep(id: number, expectedStep: string | null, input: UpdateFlowInput): Promise<boolean>;
 
 	// Settings
 	getSetting(key: string): Promise<string | null>;

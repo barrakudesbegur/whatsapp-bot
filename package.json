@@ -16,6 +16,7 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"validate": "npm run format:check && npm run lint && npm run check",
+		"chat": "node scripts/chat.ts",
 		"db:apply:local": "wrangler d1 migrations apply whatsapp-bot --local",
 		"db:apply:remote": "wrangler d1 migrations apply whatsapp-bot --remote",
 		"db:query:local": "wrangler d1 execute whatsapp-bot --local --command",

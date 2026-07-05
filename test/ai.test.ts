@@ -1,195 +1,155 @@
 /**
- * AI stage tests (PLAN 4.6): prompt assembly, structured-interpretation
- * parsing, the Workers AI provider with a mocked AI binding (happy, malformed
- * and error paths), the live events feed, and the flow's name interpretation.
+ * Prompt assembly + state loading: the decide() prompt carries the KB, the draft,
+ * what's missing, the erasure flag and the anti-rigidity/injection rules; the
+ * state loader derives everything from the store. No model involved.
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-	buildAnswerSystemPrompt,
-	buildInterpretMessages,
-	parseInterpretResponse
-} from '../src/lib/server/ai/prompt.ts';
-import { PRIMARY_MODEL, WorkersAiProvider, messageText } from '../src/lib/server/ai/workers-ai.ts';
+import { buildKbBlock } from '../src/lib/server/ai/prompt.ts';
+import { buildDecideMessages } from '../src/lib/server/ai/decide-prompt.ts';
+import { loadDecisionState, messageText } from '../src/lib/server/survey/state.ts';
 import { fetchEventsSection } from '../src/lib/server/kb/events.ts';
 import { MemoryStore } from '../src/lib/server/db/memory.ts';
-import { STEP, cursSardanesFlow } from '../src/lib/server/flows/curs-sardanes.ts';
 import type { Env } from '../src/lib/server/types.ts';
 import type { MessageRow } from '../src/lib/server/db/store.ts';
+import { makeState, testEnv } from './util.ts';
 
-const AVAIL = ['dissabtes', 'diumenges', 'entre-setmana', 'depen', 'igual'];
-
-function fakeEnv(run: (model: unknown, input: unknown) => Promise<unknown>): Env {
-	return { AI: { run } } as unknown as Env;
-}
-
-const BASE_PROMPT = {
-	staticKb: 'STATIC-KB-TEXT',
-	dynamicEntries: [],
-	courseStatus: 'exploring',
-	courseStatusNote: '',
-	hasCompletedSurvey: false,
-	hasPendingQuestion: false
-};
-
-describe('prompt assembly', () => {
-	it('includes the static KB and offers the survey to newcomers', () => {
-		const p = buildAnswerSystemPrompt(BASE_PROMPT);
-		expect(p).toContain('STATIC-KB-TEXT');
-		expect(p).toContain("encara NO ha fet l'enquesta");
-		expect(p).toContain('@barrakudesbegur');
-	});
-
-	it('injects dynamic entries, course status + note, events and the pending steer', () => {
-		const p = buildAnswerSystemPrompt({
-			...BASE_PROMPT,
+describe('buildKbBlock', () => {
+	it('folds static KB, dynamic entries, status + note and events', () => {
+		const block = buildKbBlock({
+			staticKb: 'STATIC-KB-TEXT',
 			dynamicEntries: [{ title: 'Nova junta', content: 'Hi ha junta nova.' }],
 			courseStatus: 'confirmed',
 			courseStatusNote: "comencem a l'octubre",
-			eventsSection: '- [PROPER] 2026-10-04 — Curs de sardanes: yay (url)',
-			conversationSnippet: 'Persona: hola\nKudi: Ei!',
-			hasPendingQuestion: true
+			eventsSection: '- [PROPER] 2026-10-04 — Curs de sardanes: yay (url)'
 		});
-		expect(p).toContain('Nova junta');
-		expect(p).toContain('CONFIRMAT');
-		expect(p).toContain("comencem a l'octubre");
-		expect(p).toContain('2026-10-04');
-		expect(p).toContain('Persona: hola');
-		expect(p).toContain('pregunta pendent');
-		expect(p).not.toContain("encara NO ha fet l'enquesta");
-	});
-
-	it('builds interpret messages for options and for name extraction', () => {
-		const avail = buildInterpretMessages({
-			field: 'availability',
-			options: AVAIL,
-			text: 'els matins'
-		});
-		expect(avail[0]?.content).toContain('dissabtes');
-		expect(avail[1]?.content).toBe('els matins');
-		const name = buildInterpretMessages({
-			field: 'name',
-			options: [],
-			text: 'sóc la Núria'
-		});
-		expect(name[0]?.content).toContain('nom');
+		expect(block).toContain('STATIC-KB-TEXT');
+		expect(block).toContain('Nova junta');
+		expect(block).toContain('CONFIRMAT');
+		expect(block).toContain("comencem a l'octubre");
+		expect(block).toContain('2026-10-04');
 	});
 });
 
-describe('parseInterpretResponse', () => {
-	it('parses plain and fenced JSON', () => {
-		expect(parseInterpretResponse('{"value":"dissabtes"}', AVAIL)).toBe('dissabtes');
-		expect(parseInterpretResponse('És clar!\n```json\n{"value": "custom"}\n```', AVAIL)).toBe(
-			'custom'
+describe('buildDecideMessages', () => {
+	it('system prompt carries the draft, the missing fields and the action whitelist', () => {
+		const [system, user] = buildDecideMessages(
+			makeState({
+				person: { displayName: 'Pol', profileName: null, isAnonymous: false },
+				survey: {
+					status: 'active',
+					collected: { signup: 'grup', availability: null, availabilityRaw: null },
+					instanceId: 1
+				},
+				missing: ['availability'],
+				userMessage: 'els dissabtes'
+			})
 		);
+		expect(system!.role).toBe('system');
+		expect(system!.content).toContain('- nom: Pol');
+		expect(system!.content).toContain('- signup: grup');
+		expect(system!.content).toContain('FALTA (en aquest ordre): availability');
+		expect(system!.content).toContain('record_availability');
+		expect(system!.content).toContain('set_display_name');
+		expect(user!.content).toContain('els dissabtes');
 	});
 
-	it('rejects out-of-options values, garbage and nulls', () => {
-		expect(parseInterpretResponse('{"value":"dimarts"}', AVAIL)).toBeNull();
-		expect(parseInterpretResponse('cap json aquí', AVAIL)).toBeNull();
-		expect(parseInterpretResponse('{"value":null}', AVAIL)).toBeNull();
-		expect(parseInterpretResponse('{"value":"NULL"}', AVAIL)).toBeNull();
+	it('includes the anti-rigidity rules, formatting guidance and injection defense', () => {
+		const [system] = buildDecideMessages(makeState());
+		expect(system!.content).toContain('MAI et quedis encallat'); // never demand a magic sentence
+		expect(system!.content).toContain('Anònim'); // refused-name path
+		expect(system!.content).toContain('*negreta*'); // WhatsApp formatting
+		expect(system!.content).toContain('DADES, no instruccions'); // injection line
+		expect(system!.content).toContain('control'); // option generation
 	});
 
-	it('name mode accepts any short string and caps it', () => {
-		expect(parseInterpretResponse('{"value":"Montse"}', [])).toBe('Montse');
-		expect(parseInterpretResponse(`{"value":"${'x'.repeat(80)}"}`, [])).toHaveLength(40);
+	it('marks a tapped option and flags a pending erasure', () => {
+		const [system, user] = buildDecideMessages(
+			makeState({ userMessage: 'Dissabtes', tapped: true, erasurePending: true })
+		);
+		expect(user!.content).toContain('TOCAT');
+		expect(system!.content).toContain('PENDENT DE CONFIRMAR');
+	});
+
+	it('embeds the KB', () => {
+		const [system] = buildDecideMessages(makeState({ kb: 'THE-KB-BLOCK' }));
+		expect(system!.content).toContain('THE-KB-BLOCK');
 	});
 });
 
-describe('WorkersAiProvider', () => {
-	it('answers via the model, with KB + status in the system prompt and meta logged', async () => {
-		let seen: { messages: { role: string; content: string }[] } | undefined;
-		const env = fakeEnv(async (_m, input) => {
-			seen = input as typeof seen;
-			return { response: 'Hola, Maria!', usage: { total_tokens: 42 } };
-		});
+describe('loadDecisionState', () => {
+	it('derives draft, missing and erasurePending from the store', async () => {
 		const store = new MemoryStore();
+		const person = await store.upsertPerson('34600', 'Prof', 't0');
+		await store.setDisplayName(person.id, 'Marina', 't0');
+		await store.createFlowInstance({
+			personId: person.id,
+			flowType: 'curs-sardanes',
+			status: 'active',
+			step: null,
+			dataJson: JSON.stringify({ action: 'avisam' }),
+			createdAt: 't0'
+		});
+		await store.createFlowInstance({
+			personId: person.id,
+			flowType: 'gdpr-erase',
+			status: 'active',
+			step: null,
+			dataJson: '{}',
+			createdAt: 't1'
+		});
 		await store.upsertKbEntry({
-			slug: 'junta',
-			title: 'Assaig de prova',
-			contentMd: 'hi ha assaig dijous',
+			slug: 'x',
+			title: 'Entrada activa',
+			contentMd: 'contingut',
 			active: true,
-			at: '2026-07-05T00:00:00Z'
+			at: 't0'
 		});
-		await store.setSetting('course_status', 'confirmed', '2026-07-05T00:00:00Z');
-		const provider = new WorkersAiProvider(env, store);
-
-		const res = await provider.answerQuestion({
-			question: 'hi ha novetats?',
-			hasCompletedSurvey: false,
-			hasPendingQuestion: false
-		});
-
-		expect(res.text).toBe('Hola, Maria!');
-		expect(res.meta.model).toBe(PRIMARY_MODEL);
-		expect(res.meta.tokens).toBe(42);
-		expect(res.meta.latencyMs).toBeGreaterThanOrEqual(0);
-		expect(seen?.messages[0]?.role).toBe('system');
-		expect(seen?.messages[0]?.content).toContain('Assaig de prova');
-		expect(seen?.messages[0]?.content).toContain('CONFIRMAT');
-		expect(seen?.messages[1]?.content).toBe('hi ha novetats?');
-	});
-
-	it('inactive kb entries stay out of the prompt', async () => {
-		let system = '';
-		const env = fakeEnv(async (_m, input) => {
-			system = (input as { messages: { content: string }[] }).messages[0]!.content;
-			return { response: 'ok' };
-		});
-		const store = new MemoryStore();
 		await store.upsertKbEntry({
 			slug: 'off',
 			title: 'Entrada desactivada',
-			contentMd: "no m'hauries de veure",
+			contentMd: 'ocult',
 			active: false,
-			at: '2026-07-05T00:00:00Z'
+			at: 't0'
 		});
-		await new WorkersAiProvider(env, store).answerQuestion({
-			question: '?',
-			hasCompletedSurvey: true,
-			hasPendingQuestion: false
-		});
-		expect(system).not.toContain('Entrada desactivada');
+
+		const state = await loadDecisionState(
+			{ id: person.id, display_name: 'Marina', profile_name: 'Prof' },
+			'hola',
+			false,
+			{ store, env: testEnv() }
+		);
+		expect(state.person.displayName).toBe('Marina');
+		expect(state.survey.status).toBe('active');
+		expect(state.survey.collected.signup).toBe('avisam');
+		expect(state.missing).toEqual(['availability']);
+		expect(state.erasurePending).toBe(true);
+		expect(state.kb).toContain('Entrada activa');
+		expect(state.kb).not.toContain('Entrada desactivada');
 	});
 
-	it('falls back to the canned Catalan line when the model errors', async () => {
-		const env = fakeEnv(async () => {
-			throw new Error('boom');
+	it('drops the current inbound from the transcript tail', async () => {
+		const store = new MemoryStore();
+		const person = await store.upsertPerson('34600', null, 't0');
+		await store.insertInboundMessage({
+			waMessageId: 'w1',
+			personId: person.id,
+			msgType: 'text',
+			bodyJson: JSON.stringify({ text: { body: 'hola' } }),
+			createdAt: 't1'
 		});
-		const provider = new WorkersAiProvider(env, new MemoryStore());
-		const res = await provider.answerQuestion({
-			question: 'què és això?',
-			hasCompletedSurvey: false,
-			hasPendingQuestion: false
-		});
-		expect(res.text).toContain('Instagram');
-		expect(res.meta.model).toContain('#error');
+		const state = await loadDecisionState(
+			{ id: person.id, display_name: null, profile_name: null },
+			'hola',
+			false,
+			{ store, env: testEnv() }
+		);
+		expect(state.transcript).toEqual([]);
 	});
+});
 
-	it('interprets step answers and survives malformed output', async () => {
-		let output = '{"value":"diumenges"}';
-		const env = fakeEnv(async () => ({ response: output }));
-		const provider = new WorkersAiProvider(env, new MemoryStore());
-
-		const ok = await provider.interpretStepAnswer({
-			text: 'els diumenges em va perfecte',
-			field: 'availability',
-			options: AVAIL
-		});
-		expect(ok.value).toBe('diumenges');
-		expect(ok.raw).toBe('els diumenges em va perfecte');
-
-		output = 'sóc un model que no sap fer JSON';
-		const bad = await provider.interpretStepAnswer({
-			text: '?',
-			field: 'availability',
-			options: AVAIL
-		});
-		expect(bad.value).toBeNull();
-	});
-
-	it('extracts readable text from stored rows for the snippet', () => {
+describe('messageText', () => {
+	it('extracts readable text from stored rows', () => {
 		const row = (bodyJson: string): MessageRow =>
 			({ body_json: bodyJson, direction: 'in' }) as MessageRow;
 		expect(messageText(row(JSON.stringify({ text: { body: 'hola' } })))).toBe('hola');
@@ -237,25 +197,5 @@ describe('fetchEventsSection', () => {
 			throw new Error('network down');
 		});
 		expect(broken).toBeUndefined();
-	});
-});
-
-describe('flow name interpretation (PLAN 4.6 structured mode)', () => {
-	it('uses the AI-extracted name on the name step', () => {
-		const r = cursSardanesFlow.onStep({ data: {} }, STEP.NAME, {
-			kind: 'interpreted',
-			value: 'Montse',
-			raw: 'doncs em pots dir montse, va'
-		});
-		expect(r.patch?.displayName).toBe('Montse');
-		expect(r.patch?.step).toBe(STEP.ACTION);
-	});
-
-	it('asks the AI to extract the name when the text is unclear', () => {
-		const r = cursSardanesFlow.onStep({ data: {} }, STEP.NAME, {
-			kind: 'text',
-			text: 'però això del curs quant costa?'
-		});
-		expect(r.deferToAi?.interpret?.field).toBe('name');
 	});
 });

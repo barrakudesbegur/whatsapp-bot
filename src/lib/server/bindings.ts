@@ -7,7 +7,7 @@
 import { getRequestEvent } from '$app/server';
 import type { Env } from './types.ts';
 import { D1Store } from './db/d1.ts';
-import { WorkersAiProvider } from './ai/workers-ai.ts';
+import { WorkersAiDecider } from './ai/workers-ai-decider.ts';
 import { makeDeps, type RouterDeps } from './router.ts';
 
 /** The Worker env for the current request. Throws if the D1 binding is missing. */
@@ -24,9 +24,9 @@ export function getStore(): D1Store {
 	return new D1Store(getEnv().DB);
 }
 
-/** Full router deps (env + D1 store + Workers AI provider) for the current request. */
+/** Full router deps (env + D1 store + Workers AI decider) for the current request. */
 export function getDeps(): RouterDeps {
 	const env = getEnv();
 	const store = new D1Store(env.DB);
-	return makeDeps(env, store, new WorkersAiProvider(env, store));
+	return makeDeps(env, store, new WorkersAiDecider(env));
 }

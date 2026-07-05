@@ -135,24 +135,6 @@ export class D1Store implements Store {
 		return row !== null;
 	}
 
-	async getFlowInstance(id: number): Promise<FlowInstanceRow | null> {
-		return await this.db
-			.prepare(`SELECT * FROM flow_instances WHERE id = ?1`)
-			.bind(id)
-			.first<FlowInstanceRow>();
-	}
-
-	async getActiveFlowInstance(personId: number): Promise<FlowInstanceRow | null> {
-		return await this.db
-			.prepare(
-				`SELECT * FROM flow_instances
-           WHERE person_id = ?1 AND status = 'active'
-           ORDER BY updated_at DESC, id DESC LIMIT 1`
-			)
-			.bind(personId)
-			.first<FlowInstanceRow>();
-	}
-
 	async getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null> {
 		return await this.db
 			.prepare(
@@ -201,32 +183,6 @@ export class D1Store implements Store {
 				input.completedAt ?? null
 			)
 			.run();
-	}
-
-	async updateFlowStep(
-		id: number,
-		expectedStep: string | null,
-		input: UpdateFlowInput
-	): Promise<boolean> {
-		const row = await this.db
-			.prepare(
-				`UPDATE flow_instances
-           SET status = ?3, step = ?4, data_json = ?5, updated_at = ?6,
-               completed_at = COALESCE(?7, completed_at)
-         WHERE id = ?1 AND step IS ?2
-         RETURNING id`
-			)
-			.bind(
-				id,
-				expectedStep,
-				input.status,
-				input.step,
-				input.dataJson,
-				input.updatedAt,
-				input.completedAt ?? null
-			)
-			.first<{ id: number }>();
-		return row !== null;
 	}
 
 	async getSetting(key: string): Promise<string | null> {

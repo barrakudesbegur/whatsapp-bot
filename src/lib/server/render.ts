@@ -143,7 +143,11 @@ export function renderMessage(row: MessageRow): RenderedMessage {
 // --- CSV export -----------------------------------------------------------
 
 function csvCell(value: unknown): string {
-	const s = value == null ? '' : String(value);
+	let s = value == null ? '' : String(value);
+	// Formula-injection guard: display names are now free model-extracted text, so a
+	// cell starting with a formula trigger gets a leading apostrophe (neutralised by
+	// spreadsheets) before the usual quoting.
+	if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
 	return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

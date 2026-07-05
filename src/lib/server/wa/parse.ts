@@ -3,15 +3,25 @@
  * consume. Preserves the raw message for D1 body_json.
  */
 
-import type { FlowInput } from '../flows/types.ts';
 import type { InboundMessage, StatusUpdate, WebhookEnvelope } from './wire.ts';
+
+/**
+ * Normalized inbound the router understands. A tapped button/list carries its id
+ * (needed only for the GDPR confirm fast-path) and its title (fed to the model as
+ * the user's message — a tap is understood exactly like typed free text).
+ */
+export type InboundInput =
+	| { kind: 'text'; text: string }
+	| { kind: 'button'; id: string; title: string }
+	| { kind: 'list'; id: string; title: string }
+	| { kind: 'unsupported'; msgType: string };
 
 export interface ParsedMessage {
 	waMessageId: string;
 	from: string;
 	/** D1 msg_type: text | button_reply | list_reply | <raw media type>. */
 	msgType: string;
-	input: FlowInput;
+	input: InboundInput;
 	/** Interactive replies carry context.id → the outbound message replied to. */
 	contextId?: string;
 	raw: InboundMessage;
@@ -29,8 +39,8 @@ export interface ParsedWebhook {
 	statuses: StatusUpdate[];
 }
 
-function toFlowInput(m: InboundMessage): {
-	input: FlowInput;
+function toInput(m: InboundMessage): {
+	input: InboundInput;
 	msgType: string;
 } {
 	if (m.type === 'text' && m.text) {
@@ -84,7 +94,7 @@ export function parseWebhook(envelope: WebhookEnvelope): ParsedWebhook {
 
 			for (const m of value.messages ?? []) {
 				if (!m.id || !m.from) continue;
-				const { input, msgType } = toFlowInput(m);
+				const { input, msgType } = toInput(m);
 				messages.push({
 					waId: m.from,
 					profileName: profileByWaId.get(m.from),

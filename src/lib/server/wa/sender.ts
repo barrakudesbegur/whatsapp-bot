@@ -15,7 +15,7 @@
  */
 
 import type { OutMessage } from '../messages.ts';
-import type { AiMeta } from '../ai/provider.ts';
+import type { AiMeta } from '../ai/decide.ts';
 import type { Store } from '../db/store.ts';
 import type { Env } from '../types.ts';
 import { nowIso } from '../time.ts';

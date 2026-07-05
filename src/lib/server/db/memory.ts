@@ -142,18 +142,6 @@ export class MemoryStore implements Store {
 	}
 
 	// Flow instances --------------------------------------------------------
-	async getFlowInstance(id: number): Promise<FlowInstanceRow | null> {
-		const f = this.flows.find((f) => f.id === id);
-		return f ? { ...f } : null;
-	}
-
-	async getActiveFlowInstance(personId: number): Promise<FlowInstanceRow | null> {
-		const active = this.flows
-			.filter((f) => f.person_id === personId && f.status === 'active')
-			.sort((a, b) => b.id - a.id);
-		return active[0] ? { ...active[0] } : null;
-	}
-
 	async getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null> {
 		const list = this.flows
 			.filter((f) => f.person_id === personId && f.flow_type === flowType)
@@ -185,22 +173,6 @@ export class MemoryStore implements Store {
 		f.data_json = input.dataJson;
 		f.updated_at = input.updatedAt;
 		if (input.completedAt != null) f.completed_at = input.completedAt;
-	}
-
-	async updateFlowStep(
-		id: number,
-		expectedStep: string | null,
-		input: UpdateFlowInput
-	): Promise<boolean> {
-		const f = this.flows.find((f) => f.id === id);
-		if (!f) return false;
-		if (f.step !== expectedStep) return false; // optimistic CAS failed
-		f.status = input.status;
-		f.step = input.step;
-		f.data_json = input.dataJson;
-		f.updated_at = input.updatedAt;
-		if (input.completedAt != null) f.completed_at = input.completedAt;
-		return true;
 	}
 
 	// Settings --------------------------------------------------------------
