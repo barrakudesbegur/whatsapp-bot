@@ -11,10 +11,12 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { buildAnswerSystemPrompt, buildInterpretMessages } from '../src/ai/prompt.ts';
+import { buildAnswerSystemPrompt, buildInterpretMessages } from '../src/lib/server/ai/prompt.ts';
 
+// Candidates to compare. @cf/google/gemma-3-12b-it was sunset (2026-05-30
+// deprecation → 5018); Gemma 4 is its successor and the current default.
 const MODELS = [
-	'@cf/google/gemma-3-12b-it',
+	'@cf/google/gemma-4-26b-a4b-it',
 	'@cf/meta/llama-3.3-70b-instruct-fp8-fast',
 	'@cf/mistralai/mistral-small-3.1-24b-instruct'
 ];

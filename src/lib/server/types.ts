@@ -8,6 +8,11 @@ export interface Env {
 	DB: D1Database;
 	/** Workers AI (free-text fallback). */
 	AI: Ai;
+	/**
+	 * Text-generation model id for Kudi's free-text answers. Overrides the
+	 * built-in default (see PRIMARY_MODEL) so the model is swappable as config.
+	 */
+	AI_MODEL?: string;
 
 	/**
 	 * Live agenda feed (the landing's events collection as JSON). Unset or

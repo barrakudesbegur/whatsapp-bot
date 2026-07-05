@@ -1,12 +1,14 @@
 /**
- * Workers AI provider (PLAN 4.6). Gemma 3 12B behind the AiProvider interface;
- * prompt = Kudi persona + static kb/ + dynamic kb_entries + course_status +
- * conversation snippet (see src/ai/prompt.ts).
+ * Workers AI provider (PLAN 4.6). A text-generation model behind the AiProvider
+ * interface; prompt = Kudi persona + static kb/ + dynamic kb_entries +
+ * course_status + conversation snippet (see src/ai/prompt.ts).
  *
  * Degrades gracefully: any model/binding error falls back to the deterministic
  * stub's canned Catalan line (never crashes the webhook). This also makes
  * local `wrangler dev` usable without Cloudflare auth — AI calls fail → canned
- * fallback, everything else works.
+ * fallback, everything else works. Watch for `<model>#error` tags in the admin
+ * transcript: they mean the model call threw and Kudi answered with the canned
+ * line (e.g. a sunset model → Workers AI 5018 "not allowed to access").
  */
 
 import type { Store, MessageRow } from '../db/store.ts';
@@ -28,10 +30,18 @@ import {
 	type InterpretResult
 } from './provider.ts';
 
-export const PRIMARY_MODEL = '@cf/google/gemma-3-12b-it';
-// Fallback candidates (compare manually with `node scripts/eval-catalan.ts`):
-//   "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
-//   "@cf/mistralai/mistral-small-3.1-24b-instruct"
+/**
+ * Default text model, overridable per-environment via the `AI_MODEL` var (see
+ * wrangler.jsonc) so the model is CONFIGURATION, swappable without a code change.
+ *
+ * Gemma 4 succeeds the previous default `@cf/google/gemma-3-12b-it`, which
+ * Workers AI sunset after its 2026-05-30 deprecation — calls started returning
+ * 5018 ("account not allowed to access this model") and every answer silently
+ * degraded to the canned line. Compare candidates with `node scripts/eval-catalan.ts`:
+ *   "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+ *   "@cf/mistralai/mistral-small-3.1-24b-instruct"
+ */
+export const PRIMARY_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 
 interface ChatResult {
 	response?: string;
@@ -52,11 +62,15 @@ function tokensOf(res: unknown): number | undefined {
 
 export class WorkersAiProvider implements AiProvider {
 	private readonly canned = new StubAiProvider();
+	/** Effective model: the `AI_MODEL` var overrides the default (config, no code change). */
+	private readonly model: string;
 
 	constructor(
 		private readonly env: Env,
 		private readonly store: Store
-	) {}
+	) {
+		this.model = env.AI_MODEL?.trim() || PRIMARY_MODEL;
+	}
 
 	async answerQuestion(ctx: AnswerContext): Promise<AnswerResult> {
 		const t0 = Date.now();
@@ -82,7 +96,7 @@ export class WorkersAiProvider implements AiProvider {
 				hasPendingQuestion: ctx.hasPendingQuestion,
 				conversationSnippet: snippet
 			});
-			const res = await this.env.AI.run(PRIMARY_MODEL as Parameters<Ai['run']>[0], {
+			const res = await this.env.AI.run(this.model as Parameters<Ai['run']>[0], {
 				messages: [
 					{ role: 'system', content: system },
 					{ role: 'user', content: ctx.question }
@@ -102,7 +116,7 @@ export class WorkersAiProvider implements AiProvider {
 	async interpretStepAnswer(ctx: InterpretContext): Promise<InterpretResult> {
 		const t0 = Date.now();
 		try {
-			const res = await this.env.AI.run(PRIMARY_MODEL as Parameters<Ai['run']>[0], {
+			const res = await this.env.AI.run(this.model as Parameters<Ai['run']>[0], {
 				messages: buildInterpretMessages({
 					field: ctx.field,
 					options: ctx.options,
@@ -137,11 +151,11 @@ export class WorkersAiProvider implements AiProvider {
 	}
 
 	private meta(t0: number, tokens?: number): AiMeta {
-		return { model: PRIMARY_MODEL, latencyMs: Date.now() - t0, tokens };
+		return { model: this.model, latencyMs: Date.now() - t0, tokens };
 	}
 
 	private errorMeta(t0: number): AiMeta {
-		return { model: `${PRIMARY_MODEL}#error`, latencyMs: Date.now() - t0 };
+		return { model: `${this.model}#error`, latencyMs: Date.now() - t0 };
 	}
 }
 

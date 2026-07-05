@@ -46,6 +46,10 @@
 		// Live agenda for Kudi's KB: the landing's events collection (no duplication).
 		"EVENTS_JSON_URL": "https://barrakudesbegur.org/events.json",
 		// Meta Graph API version for outbound sends (current official docs value).
-		"WA_GRAPH_VERSION": "v23.0"
+		"WA_GRAPH_VERSION": "v23.0",
+		// Workers AI text model for Kudi's free-text answers. Swappable here (config,
+		// no code change). The previous default @cf/google/gemma-3-12b-it was sunset
+		// after its 2026-05-30 deprecation (calls 5018'd → canned fallback).
+		"AI_MODEL": "@cf/google/gemma-4-26b-a4b-it"
 	}
 }
