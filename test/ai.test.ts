@@ -69,6 +69,26 @@ describe('buildDecideMessages', () => {
 		expect(system!.content).toContain('hola@barrakudesbegur.org');
 	});
 
+	it('lists active campaigns with a soft-steering rule', () => {
+		const [system] = buildDecideMessages(
+			makeState({
+				campaigns: [
+					{ slug: 'curs-sardanes', title: 'Curs de sardanes', pitch: 'Explorant un curs.' },
+					{ slug: 'festa-major', title: 'Festa Major', pitch: 'Voluntariat obert!' }
+				]
+			})
+		);
+		expect(system!.content).toContain('CAMPANYES ACTIVES');
+		expect(system!.content).toContain('*Curs de sardanes*: Explorant un curs.');
+		expect(system!.content).toContain('*Festa Major*: Voluntariat obert!');
+		expect(system!.content).toContain('amb suavitat');
+	});
+
+	it('with no campaigns, tells Kudi to just help without pushing anything', () => {
+		const [system] = buildDecideMessages(makeState({ campaigns: [] }));
+		expect(system!.content).toContain('Cap. Simplement ajuda');
+	});
+
 	it('marks a tapped option', () => {
 		const [, user] = buildDecideMessages(makeState({ userMessage: 'Dissabtes', tapped: true }));
 		expect(user!.content).toContain('TOCAT');
@@ -118,6 +138,8 @@ describe('loadDecisionState', () => {
 		expect(state.survey.status).toBe('active');
 		expect(state.survey.collected.signup).toBe('avisam');
 		expect(state.missing).toEqual(['availability']);
+		// The seeded curs-sardanes campaign flows into the state (active-only).
+		expect(state.campaigns.map((c) => c.slug)).toEqual(['curs-sardanes']);
 		expect(state.kb).toContain('Entrada activa');
 		expect(state.kb).not.toContain('Entrada desactivada');
 	});

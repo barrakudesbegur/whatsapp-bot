@@ -6,6 +6,7 @@
  */
 
 import type {
+	CampaignRow,
 	CompletedFlowRow,
 	ConversationSummary,
 	CreateFlowInput,
@@ -17,6 +18,7 @@ import type {
 	PersonRow,
 	Store,
 	UpdateFlowInput,
+	UpsertCampaignInput,
 	UpsertKbEntryInput
 } from './store.ts';
 
@@ -25,12 +27,24 @@ export class MemoryStore implements Store {
 	private flows: FlowInstanceRow[] = [];
 	private messages: MessageRow[] = [];
 	private kb: KbEntryRow[] = [];
+	private campaigns: CampaignRow[] = [];
 	private settings = new Map<string, string>();
-	private seq = { person: 0, flow: 0, message: 0, kb: 0 };
+	private seq = { person: 0, flow: 0, message: 0, kb: 0, campaign: 0 };
 
 	constructor() {
 		this.settings.set('course_status', 'exploring');
 		this.settings.set('course_status_note', '');
+		// Mirror the 0002 migration seed: the sardanes survey is campaign #1.
+		this.campaigns.push({
+			id: ++this.seq.campaign,
+			slug: 'curs-sardanes',
+			title: 'Curs de sardanes',
+			pitch_md:
+				'Estem explorant muntar un curs per aprendre a ballar sardanes a Begur. Estem recollint qui s’hi apuntaria amb una mini-enquesta per WhatsApp (tu mateix la pots fer!).',
+			active: 1,
+			priority: 10,
+			updated_at: '2026-07-06T00:00:00.000Z'
+		});
 	}
 
 	// People ----------------------------------------------------------------
@@ -217,6 +231,43 @@ export class MemoryStore implements Store {
 		const before = this.kb.length;
 		this.kb = this.kb.filter((e) => e.id !== id);
 		return this.kb.length < before;
+	}
+
+	// Campaigns ---------------------------------------------------------------
+	async listCampaigns(activeOnly = false): Promise<CampaignRow[]> {
+		return this.campaigns
+			.filter((c) => !activeOnly || c.active === 1)
+			.sort((a, b) => b.priority - a.priority || a.slug.localeCompare(b.slug))
+			.map((c) => ({ ...c }));
+	}
+
+	async upsertCampaign(input: UpsertCampaignInput): Promise<CampaignRow> {
+		const existing = this.campaigns.find((c) => c.slug === input.slug);
+		if (existing) {
+			existing.title = input.title;
+			existing.pitch_md = input.pitchMd;
+			existing.active = input.active ? 1 : 0;
+			existing.priority = input.priority;
+			existing.updated_at = input.at;
+			return { ...existing };
+		}
+		const row: CampaignRow = {
+			id: ++this.seq.campaign,
+			slug: input.slug,
+			title: input.title,
+			pitch_md: input.pitchMd,
+			active: input.active ? 1 : 0,
+			priority: input.priority,
+			updated_at: input.at
+		};
+		this.campaigns.push(row);
+		return { ...row };
+	}
+
+	async deleteCampaign(id: number): Promise<boolean> {
+		const before = this.campaigns.length;
+		this.campaigns = this.campaigns.filter((c) => c.id !== id);
+		return this.campaigns.length < before;
 	}
 
 	// Admin -----------------------------------------------------------------

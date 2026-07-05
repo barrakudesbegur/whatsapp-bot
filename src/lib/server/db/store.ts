@@ -127,6 +127,13 @@ export interface Store {
 	upsertKbEntry(input: UpsertKbEntryInput): Promise<KbEntryRow>;
 	deleteKbEntry(id: number): Promise<boolean>;
 
+	// Campaigns — what the association is pushing right now (0..N active). Kudi
+	// reads the active ones each turn and gently steers conversation toward them.
+	/** Active-only (highest priority first) for the prompt; all rows for the admin. */
+	listCampaigns(activeOnly?: boolean): Promise<CampaignRow[]>;
+	upsertCampaign(input: UpsertCampaignInput): Promise<CampaignRow>;
+	deleteCampaign(id: number): Promise<boolean>;
+
 	// Admin read helpers (used by /admin/api/* and verification).
 	listConversations(limit?: number): Promise<ConversationSummary[]>;
 	listMessagesForPerson(personId: number): Promise<MessageRow[]>;
@@ -157,6 +164,25 @@ export interface UpsertKbEntryInput {
 	title: string;
 	contentMd: string;
 	active: boolean;
+	at: string;
+}
+
+export interface CampaignRow {
+	id: number;
+	slug: string;
+	title: string;
+	pitch_md: string;
+	active: number;
+	priority: number;
+	updated_at: string;
+}
+
+export interface UpsertCampaignInput {
+	slug: string;
+	title: string;
+	pitchMd: string;
+	active: boolean;
+	priority: number;
 	at: string;
 }
 

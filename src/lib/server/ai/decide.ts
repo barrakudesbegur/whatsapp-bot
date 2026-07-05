@@ -104,6 +104,8 @@ export interface DecisionState {
 	};
 	/** Fields still worth asking for, in ask order. Derived, handed to the model as data. */
 	missing: ('name' | 'signup' | 'availability')[];
+	/** Active campaigns (0..N, highest priority first) Kudi gently steers toward. */
+	campaigns: { slug: string; title: string; pitch: string }[];
 	course: { status: string; note: string };
 	/** Assembled knowledge block (static KB + active entries + live events). */
 	kb: string;

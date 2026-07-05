@@ -6,6 +6,7 @@
  */
 
 import type {
+	CampaignRow,
 	CompletedFlowRow,
 	ConversationSummary,
 	CreateFlowInput,
@@ -17,6 +18,7 @@ import type {
 	PersonRow,
 	Store,
 	UpdateFlowInput,
+	UpsertCampaignInput,
 	UpsertKbEntryInput
 } from './store.ts';
 
@@ -230,6 +232,41 @@ export class D1Store implements Store {
 	async deleteKbEntry(id: number): Promise<boolean> {
 		const row = await this.db
 			.prepare(`DELETE FROM kb_entries WHERE id = ?1 RETURNING id`)
+			.bind(id)
+			.first<{ id: number }>();
+		return row !== null;
+	}
+
+	async listCampaigns(activeOnly = false): Promise<CampaignRow[]> {
+		const { results } = await this.db
+			.prepare(
+				`SELECT * FROM campaigns ${activeOnly ? 'WHERE active = 1 ' : ''}ORDER BY priority DESC, slug`
+			)
+			.all<CampaignRow>();
+		return results ?? [];
+	}
+
+	async upsertCampaign(input: UpsertCampaignInput): Promise<CampaignRow> {
+		const row = await this.db
+			.prepare(
+				`INSERT INTO campaigns (slug, title, pitch_md, active, priority, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(slug) DO UPDATE SET
+           title = excluded.title,
+           pitch_md = excluded.pitch_md,
+           active = excluded.active,
+           priority = excluded.priority,
+           updated_at = excluded.updated_at
+         RETURNING *`
+			)
+			.bind(input.slug, input.title, input.pitchMd, input.active ? 1 : 0, input.priority, input.at)
+			.first<CampaignRow>();
+		return row as CampaignRow;
+	}
+
+	async deleteCampaign(id: number): Promise<boolean> {
+		const row = await this.db
+			.prepare(`DELETE FROM campaigns WHERE id = ?1 RETURNING id`)
 			.bind(id)
 			.first<{ id: number }>();
 		return row !== null;

@@ -94,8 +94,9 @@ message; the reply is 1–10 short WhatsApp bubbles, each optionally carrying it
 own tappable options.
 
 - **State in** (`survey/state.ts`): who the person is, the submission **draft**
-  (collected answers + which fields are still `missing`), the KB, and a short
-  transcript.
+  (collected answers + which fields are still `missing`), the active
+  **campaigns** (admin-managed; Kudi gently steers greetings / "what's going
+  on?" toward them — 0 active = no pushing), the KB, and a short transcript.
 - **Actions out** (whitelisted; anything else is dropped by valibot validation):
   `set_display_name`, `record_signup(grup|avisam|res)`,
   `record_availability(bucket, note?)`, `start_survey`, `restart_survey`,

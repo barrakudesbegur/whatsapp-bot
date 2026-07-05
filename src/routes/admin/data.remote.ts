@@ -116,6 +116,43 @@ export const deleteKb = command(v.number(), async (id) => {
 	return { deleted };
 });
 
+// --- Campaigns (what Kudi steers conversation toward; 0..N active) ---------
+
+export const campaigns = query(async () => {
+	await requireAdmin();
+	return getStore().listCampaigns(false);
+});
+
+export const saveCampaign = command(
+	v.object({
+		slug: v.pipe(v.string(), v.trim(), v.regex(/^[a-z0-9-]+$/, 'slug must be kebab-case')),
+		title: v.pipe(v.string(), v.trim(), v.nonEmpty('title required')),
+		pitch_md: v.pipe(v.string(), v.trim(), v.nonEmpty('pitch required')),
+		active: v.optional(v.boolean(), true),
+		priority: v.optional(v.number(), 0)
+	}),
+	async ({ slug, title, pitch_md, active, priority }) => {
+		await requireAdmin();
+		const row = await getStore().upsertCampaign({
+			slug,
+			title,
+			pitchMd: pitch_md,
+			active,
+			priority,
+			at: nowIso()
+		});
+		await campaigns().refresh();
+		return row;
+	}
+);
+
+export const deleteCampaign = command(v.number(), async (id) => {
+	await requireAdmin();
+	const deleted = await getStore().deleteCampaign(id);
+	await campaigns().refresh();
+	return { deleted };
+});
+
 // --- Settings (course status) ---------------------------------------------
 
 export const settings = query(async () => {

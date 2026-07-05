@@ -26,14 +26,21 @@ export async function loadDecisionState(
 ): Promise<DecisionState> {
 	const { store, env } = deps;
 
-	const [surveyRow, kbEntries, courseStatus, courseNote, events, messages] = await Promise.all([
-		store.getLatestFlowInstance(person.id, SURVEY_ID),
-		store.listKbEntries(true),
-		store.getSetting('course_status'),
-		store.getSetting('course_status_note'),
-		fetchEventsSection(env),
-		store.listMessagesForPerson(person.id)
-	]);
+	const [surveyRow, kbEntries, campaigns, courseStatus, courseNote, events, messages] =
+		await Promise.all([
+			store.getLatestFlowInstance(person.id, SURVEY_ID),
+			store.listKbEntries(true),
+			// Fail-soft (like the events feed): a missing/broken campaigns table must
+			// degrade to "no campaigns", never silence the bot.
+			store.listCampaigns(true).catch((err) => {
+				console.error('listCampaigns failed → no campaign steering', err);
+				return [];
+			}),
+			store.getSetting('course_status'),
+			store.getSetting('course_status_note'),
+			fetchEventsSection(env),
+			store.listMessagesForPerson(person.id)
+		]);
 
 	const collected = parseCollected(surveyRow?.data_json);
 	const status: SurveyStatus = !surveyRow
@@ -61,6 +68,7 @@ export async function loadDecisionState(
 		},
 		survey: { status, collected, instanceId: surveyRow?.id ?? null },
 		missing: deriveMissing(collected, person.display_name),
+		campaigns: campaigns.map((c) => ({ slug: c.slug, title: c.title, pitch: c.pitch_md })),
 		course: { status: courseStatus ?? 'exploring', note: courseNote ?? '' },
 		kb,
 		transcript: buildTranscript(messages, userMessage),

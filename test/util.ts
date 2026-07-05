@@ -91,6 +91,13 @@ export function makeState(over: Partial<DecisionState> = {}): DecisionState {
 			instanceId: null
 		},
 		missing: ['name', 'signup', 'availability'],
+		campaigns: [
+			{
+				slug: 'curs-sardanes',
+				title: 'Curs de sardanes',
+				pitch: 'Estem explorant muntar un curs de sardanes a Begur.'
+			}
+		],
 		course: { status: 'exploring', note: '' },
 		kb: 'KB',
 		transcript: [],

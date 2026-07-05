@@ -35,10 +35,24 @@ function systemPrompt(state: DecisionState): string {
 	// --- The job ---
 	parts.push(
 		'\n## LA TEVA FEINA\n' +
-			"En una conversa natural, ajudes la gent i vas recollint una inscripció (un «esborrany») per a l'enquesta del curs de sardanes. " +
+			"En una conversa natural, ajudes la gent de part dels Barrakudes i vas recollint una inscripció (un «esborrany») per a l'enquesta del curs de sardanes. " +
 			'A CADA missatge: entén què vol dir la persona, DECIDEIX què fer i ACTUA amb «accions». ' +
 			'Cada cop que et donen una dada, la guardes amb una acció; la resta de la conversa flueix normal.'
 	);
+
+	// --- Active campaigns (0..N) ---
+	if (state.campaigns.length > 0) {
+		parts.push(
+			'\n## CAMPANYES ACTIVES ARA MATEIX\n' +
+				state.campaigns.map((c) => `- *${c.title}*: ${c.pitch}`).join('\n') +
+				'\nQuan algú saludi, pregunti què pots fer o què es cou, esmenta-ho de passada i amb suavitat (una frase, gens pesat). ' +
+				'Si ja n’esteu parlant o ja ha completat l’enquesta, no cal repetir-ho.'
+		);
+	} else {
+		parts.push(
+			'\n## CAMPANYES ACTIVES ARA MATEIX\nCap. Simplement ajuda i respon amb el coneixement de sota, sense empènyer res.'
+		);
+	}
 
 	// --- Current draft ---
 	parts.push('\n## ESBORRANY ACTUAL (el que ja saps)\n' + draftSummary(state));
