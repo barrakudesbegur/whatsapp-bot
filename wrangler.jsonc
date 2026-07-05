@@ -43,6 +43,10 @@
 		// Keep "false" until Meta setup exists: outbound sends become no-ops logged
 		// to D1, so the whole system is testable end-to-end via the simulator.
 		"WA_ENABLED": "false",
+		// The bot's public wa.me chat link, e.g. "https://wa.me/34XXXXXXXXX". When
+		// set, the index page 301-redirects to it; empty → informative page. 301s
+		// get cached by browsers — only fill this in once the number is final.
+		"WA_ME_URL": "",
 		// Live agenda for Kudi's KB: the landing's events collection (no duplication).
 		"EVENTS_JSON_URL": "https://barrakudesbegur.org/events.json",
 		// Meta Graph API version for outbound sends (current official docs value).
@@ -50,7 +54,7 @@
 		// Workers AI text model for Kudi's free-text answers. Swappable here (config,
 		// no code change). @cf/google/gemma-3-12b-it was sunset (2026-05-30 → 5018);
 		// gemma-4 works but is too slow for live chat, so we use Llama 3.3 70B fp8
-		// (speed-optimized, strong Catalan). See PRIMARY_MODEL in ai/workers-ai.ts.
+		// (speed-optimized, strong Catalan). See PRIMARY_MODEL in ai/workers-ai-decider.ts.
 		"AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 	}
 }

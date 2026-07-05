@@ -133,7 +133,9 @@ action writes are idempotent set-semantics — replays can't double-apply.
 
 - Vars: `WA_ENABLED` (`"false"` = log-only), `WA_GRAPH_VERSION`, `EVENTS_JSON_URL`,
   `AI_MODEL` (default `@cf/meta/llama-3.3-70b-instruct-fp8-fast`),
-  `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `CF_ACCESS_EMAIL_DOMAIN`.
+  `WA_ME_URL` (the bot's public wa.me link — when set, `/` 301-redirects to it;
+  unset → informative page), `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`,
+  `CF_ACCESS_EMAIL_DOMAIN`.
 - Secrets: `WA_VERIFY_TOKEN`, `WA_APP_SECRET`, `WA_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID`.
 - Local-dev-only (`.dev.vars`, never in prod): `DEV_SIMULATOR` (enables the Simulador
   tab + simulate command), `DEV_ACCESS_BYPASS` (skips the Access gate locally).
@@ -233,4 +235,5 @@ Owner steps: (1) custom domain `wa.barrakudesbegur.org`; (2) a Cloudflare Access
 app covering the host except `/webhook`, and set `CF_ACCESS_AUD`; (3)
 `wrangler secret put` the four `WA_*` secrets; (4) subscribe the Meta webhook to
 `https://wa.barrakudesbegur.org/webhook` (verify token = `WA_VERIFY_TOKEN`,
-`messages` field); (5) set `WA_ENABLED="true"`.
+`messages` field); (5) set `WA_ENABLED="true"`; (6) set `WA_ME_URL` to the
+bot's `https://wa.me/<number>` link so the index page redirects to the chat.

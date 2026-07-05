@@ -23,6 +23,11 @@ export interface Env {
 	// --- Meta WhatsApp Cloud API ---
 	/** "true" enables real outbound sends; anything else = log-only no-op. */
 	WA_ENABLED?: string;
+	/**
+	 * The bot's public wa.me chat link (e.g. "https://wa.me/34XXXXXXXXX"). When
+	 * set, the index page 301-redirects to it; unset → informative page.
+	 */
+	WA_ME_URL?: string;
 	/** Graph API version segment, e.g. "v23.0". */
 	WA_GRAPH_VERSION?: string;
 	WA_VERIFY_TOKEN?: string;
