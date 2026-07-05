@@ -51,7 +51,7 @@
     "CF_ACCESS_TEAM_DOMAIN": "https://barrakudesbegur.cloudflareaccess.com",
     // TODO(owner): paste the Access application AUD(s) — comma-separated, the
     // production app plus the preview-deployment app (see coin-reader/wrangler.toml).
-    "CF_ACCESS_AUD": "",
+    "CF_ACCESS_AUD": "092f90d1ebd4d897726da7b2547dc13c07a0e737c18b8c3ac82e4662529a3a3b",
     "CF_ACCESS_EMAIL_DOMAIN": "@barrakudesbegur.org",
     // Keep "false" until Meta setup exists: outbound sends become no-ops logged
     // to D1, so the whole system is testable end-to-end via the simulator.
