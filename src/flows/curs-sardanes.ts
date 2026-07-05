@@ -276,10 +276,25 @@ export const cursSardanesFlow: FlowModule = {
 };
 
 function onName(ctx: FlowContext, input: FlowInput): FlowResult {
-  if (input.kind === "text" || input.kind === "interpreted") {
-    const raw = input.kind === "text" ? input.text : input.raw;
-    const name = parseName(raw);
-    if (!name) return { messages: [], deferToAi: {} }; // AI answers, re-ask name
+  if (input.kind === "interpreted") {
+    // The AI already extracted the name (PLAN 4.6 structured interpretation).
+    const name = input.value.trim().slice(0, 40);
+    if (!name) return { messages: [], deferToAi: {} };
+    return {
+      messages: toActionQuestion(name),
+      patch: { displayName: name, step: STEP.ACTION },
+    };
+  }
+  if (input.kind === "text") {
+    const name = parseName(input.text);
+    if (!name) {
+      // Unclear (e.g. they asked a question) → AI: try extraction, else
+      // answer from the KB and re-ask.
+      return {
+        messages: [],
+        deferToAi: { interpret: { field: "name", options: [] } },
+      };
+    }
     return {
       messages: toActionQuestion(name),
       patch: { displayName: name, step: STEP.ACTION },

@@ -9,9 +9,9 @@ free-text fallback. Everything runs locally without Meta: while `WA_ENABLED` is 
 outbound sends are recorded to D1 as no-ops, so the whole system is testable end-to-end
 via the built-in simulator.
 
-> Scope of this repo/stage: PLAN §4.1–4.5, §4.8 (phase 3). The Workers AI provider
-> (§4.6) and the inbox admin SPA (§4.7) are later stages — this stage ships the
-> provider **interface** with a deterministic stub, and a placeholder `/admin` page.
+> Implemented: PLAN §4.1–4.6, §4.8 (phases 3–4) — core bot + the Workers AI
+> fallback with Kudi's knowledge base. The inbox admin SPA (§4.7, phase 5) is
+> the remaining stage; `/admin` is a placeholder page meanwhile.
 
 ## Architecture
 
@@ -42,7 +42,8 @@ Meta Cloud API ──POST /webhook──▶  verify X-Hub-Signature-256 (raw bod
 | `src/flows/`           | Flow registry + the `curs-sardanes` state machine (pure, unit-testable).                                                               |
 | `src/wa/`              | `wire.ts` (Cloud API types + payload builder), `parse.ts` (webhook→events), `sender.ts` (outbound), `simulate.ts` (simulator→webhook). |
 | `src/db/`              | `store.ts` (interface), `d1.ts` (production), `memory.ts` (in-memory fake for tests).                                                  |
-| `src/ai/provider.ts`   | AI provider interface + deterministic `StubAiProvider`. Next stage swaps this file only.                                               |
+| `src/ai/`              | `provider.ts` (interface + deterministic stub), `workers-ai.ts` (Gemma 3 on Workers AI), `prompt.ts` (pure prompt assembly).           |
+| `kb/` + `src/kb/`      | Kudi's knowledge: static `kb/*.md` (imported as text at build) + the live agenda feed from the landing (`src/kb/events.ts`).           |
 | `src/access.ts`        | Cloudflare Access JWT verification (ported from coin-reader), fail-closed.                                                             |
 | `src/lib/signature.ts` | `X-Hub-Signature-256` HMAC-SHA256 verification (real WebCrypto).                                                                       |
 | `migrations/`          | D1 schema (PLAN 4.2) + indexes + `settings` seed.                                                                                      |
@@ -71,6 +72,7 @@ outbound message → `flow_instance_id`, so concurrent flows per person are safe
 | ------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `WA_ENABLED`             | `"false"`                                      | `"true"` enables real Graph API sends; otherwise outbound is logged to D1 only.                     |
 | `WA_GRAPH_VERSION`       | `"v23.0"`                                      | Graph API version segment (current official docs value).                                            |
+| `EVENTS_JSON_URL`        | `https://barrakudesbegur.org/events.json`      | Live agenda for Kudi's KB (the landing's events collection). Unset/`"off"` disables.                |
 | `CF_ACCESS_TEAM_DOMAIN`  | `https://barrakudesbegur.cloudflareaccess.com` | Cloudflare Access team domain.                                                                      |
 | `CF_ACCESS_AUD`          | `""` (**TODO owner**)                          | Comma-separated Access application AUD(s): production app + preview-deploy app (coin-reader trick). |
 | `CF_ACCESS_EMAIL_DOMAIN` | `@barrakudesbegur.org`                         | Allowed email suffix.                                                                               |
@@ -139,6 +141,40 @@ npx wrangler d1 execute whatsapp-bot --local --json \
 
 Admin API (dev bypass on): `curl $BASE/admin/api/health` · `…/admin/api/conversations`.
 
+## AI — Kudi's brain (PLAN §4.6)
+
+Free text the scripted flows can't handle is answered by **Workers AI**
+(`src/ai/workers-ai.ts`), model `@cf/google/gemma-3-12b-it` (strongest free
+multilingual/Catalan bet; fallback candidates compared with the eval script).
+The system prompt (`src/ai/prompt.ts`, pure + unit-tested) is plain context
+stuffing — no vector search at this size:
+
+1. **Static KB** — `kb/*.md`, versioned here (the association, Kudi, socials, course FAQ).
+2. **Dynamic KB** — `kb_entries` rows, editable from the inbox admin without a deploy.
+3. **Live agenda** — the landing's events collection via `EVENTS_JSON_URL`
+   (fetched + edge-cached ~15 min, fail-soft; **no duplication** into this repo).
+4. **Course status** — `settings.course_status` (+ note), so "hi ha novetats?"
+   always answers with the current truth.
+5. A short conversation snippet and the pending survey question, if any.
+
+Structured mode interprets off-script step answers (K1 name extraction; K4
+availability → canonical bucket or `custom`). Model + latency (+ tokens) are
+logged into `messages.ai_meta_json`.
+
+**Degrades gracefully:** any AI/binding error falls back to a canned Catalan
+line (meta model gets an `#error` suffix) — the webhook never crashes, and
+local dev **without Cloudflare auth** keeps working end-to-end.
+
+**Compare candidate models** (Workers AI needs Cloudflare auth even locally):
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… node scripts/eval-catalan.ts
+```
+
+~17 utterances (FAQs, invent-bait, gibberish, GDPR phrasing, off-script survey
+answers) across Gemma 3 12B, Llama 3.3 70B fast and Mistral Small 3.1, printed
+side by side with latency.
+
 ## Testing
 
 ```bash
@@ -157,6 +193,10 @@ Covered (PLAN 4.8):
   using **real WebCrypto**.
 - **Duplicate replay** — the same `wa_message_id` produces no second send.
 - **Optimistic concurrency** — a stale step CAS is rejected.
+- **AI stage** — prompt assembly (KB, status, events, pending steer), structured
+  interpretation parsing (fenced / malformed / out-of-options), provider happy +
+  error paths with a mocked AI binding, events feed formatting + fail-soft, and
+  the flow's name-interpretation step.
 
 Router persistence in tests uses the in-memory Store fake; the real D1-backed Store is
 exercised live via `wrangler dev` + the simulator (see above).

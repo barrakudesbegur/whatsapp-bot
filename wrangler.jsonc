@@ -8,6 +8,9 @@
     "enabled": true,
   },
 
+  // kb/*.md is imported as plain text (Kudi's static knowledge base).
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
+
   // Static assets serve the future /admin inbox SPA. The Worker runs FIRST for
   // the bot surface (webhook, admin API, dev tools); everything else is served
   // straight from ./public. `single-page-application` makes unmatched asset
@@ -53,6 +56,8 @@
     // Keep "false" until Meta setup exists: outbound sends become no-ops logged
     // to D1, so the whole system is testable end-to-end via the simulator.
     "WA_ENABLED": "false",
+    // Live agenda for Kudi's KB: the landing's events collection (no duplication).
+    "EVENTS_JSON_URL": "https://barrakudesbegur.org/events.json",
     // Meta Graph API version for outbound sends. v23.0 is what the current
     // official Cloud API docs use in their examples; the /messages API shape is
     // stable across recent versions, so bump freely when Meta releases a newer one.

@@ -11,10 +11,12 @@ import type {
   FlowInstanceRow,
   InsertInboundInput,
   InsertOutboundInput,
+  KbEntryRow,
   MessageRow,
   PersonRow,
   Store,
   UpdateFlowInput,
+  UpsertKbEntryInput,
 } from "./store.ts";
 
 export class D1Store implements Store {
@@ -259,6 +261,46 @@ export class D1Store implements Store {
       )
       .bind(key, value, at)
       .run();
+  }
+
+  async listKbEntries(activeOnly = false): Promise<KbEntryRow[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT * FROM kb_entries ${activeOnly ? "WHERE active = 1 " : ""}ORDER BY slug`,
+      )
+      .all<KbEntryRow>();
+    return results ?? [];
+  }
+
+  async upsertKbEntry(input: UpsertKbEntryInput): Promise<KbEntryRow> {
+    const row = await this.db
+      .prepare(
+        `INSERT INTO kb_entries (slug, title, content_md, active, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(slug) DO UPDATE SET
+           title = excluded.title,
+           content_md = excluded.content_md,
+           active = excluded.active,
+           updated_at = excluded.updated_at
+         RETURNING *`,
+      )
+      .bind(
+        input.slug,
+        input.title,
+        input.contentMd,
+        input.active ? 1 : 0,
+        input.at,
+      )
+      .first<KbEntryRow>();
+    return row as KbEntryRow;
+  }
+
+  async deleteKbEntry(id: number): Promise<boolean> {
+    const row = await this.db
+      .prepare(`DELETE FROM kb_entries WHERE id = ?1 RETURNING id`)
+      .bind(id)
+      .first<{ id: number }>();
+    return row !== null;
   }
 
   async listConversations(limit = 50): Promise<ConversationSummary[]> {

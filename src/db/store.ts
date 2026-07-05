@@ -136,9 +136,31 @@ export interface Store {
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string, at: string): Promise<void>;
 
+  // Knowledge base (dynamic entries; editable from the inbox admin)
+  listKbEntries(activeOnly?: boolean): Promise<KbEntryRow[]>;
+  upsertKbEntry(input: UpsertKbEntryInput): Promise<KbEntryRow>;
+  deleteKbEntry(id: number): Promise<boolean>;
+
   // Admin read helpers (used by /admin/api/* and verification).
   listConversations(limit?: number): Promise<ConversationSummary[]>;
   listMessagesForPerson(personId: number): Promise<MessageRow[]>;
+}
+
+export interface KbEntryRow {
+  id: number;
+  slug: string;
+  title: string;
+  content_md: string;
+  active: number;
+  updated_at: string;
+}
+
+export interface UpsertKbEntryInput {
+  slug: string;
+  title: string;
+  contentMd: string;
+  active: boolean;
+  at: string;
 }
 
 export interface ConversationSummary {

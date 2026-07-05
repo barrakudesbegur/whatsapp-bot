@@ -22,6 +22,8 @@ export interface AiMeta {
 export interface AnswerContext {
   /** The user's raw inbound text. */
   question: string;
+  /** DB person id — lets the provider pull a short conversation snippet. */
+  personId?: number;
   displayName?: string;
   /** True if this person already completed the curs-sardanes survey. */
   hasCompletedSurvey: boolean;

@@ -15,7 +15,7 @@
 import { Hono } from "hono";
 import type { Env } from "./types.ts";
 import { D1Store } from "./db/d1.ts";
-import { StubAiProvider } from "./ai/provider.ts";
+import { WorkersAiProvider } from "./ai/workers-ai.ts";
 import { makeDeps, handleWebhook } from "./router.ts";
 import { verifySignature } from "./lib/signature.ts";
 import { requireAccess, type AccessIdentity } from "./access.ts";
@@ -52,7 +52,8 @@ app.post("/webhook", async (c) => {
   }
 
   try {
-    const deps = makeDeps(c.env, new D1Store(c.env.DB), new StubAiProvider());
+    const store = new D1Store(c.env.DB);
+    const deps = makeDeps(c.env, store, new WorkersAiProvider(c.env, store));
     await handleWebhook(envelope, deps);
   } catch (err) {
     // Never make Meta retry-storm us; we've deduped inbound already. Log + 200.
@@ -82,7 +83,8 @@ app.post("/dev/simulate", async (c) => {
   }
 
   const envelope = buildSimulatedWebhook(body);
-  const deps = makeDeps(c.env, new D1Store(c.env.DB), new StubAiProvider());
+  const store = new D1Store(c.env.DB);
+  const deps = makeDeps(c.env, store, new WorkersAiProvider(c.env, store));
   const sent = await handleWebhook(envelope, deps);
   return c.json({
     messages: sent.map((s) => ({

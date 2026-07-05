@@ -18,7 +18,7 @@
  * real webhook, which just 200s).
  */
 
-import type { AiProvider } from "./ai/provider.ts";
+import type { AiMeta, AiProvider } from "./ai/provider.ts";
 import type { Store, FlowInstanceRow, PersonRow } from "./db/store.ts";
 import type { Env } from "./types.ts";
 import type { OutMessage } from "./messages.ts";
@@ -226,12 +226,14 @@ async function applyResult(
   input: FlowInput,
   result: FlowResult,
   deps: RouterDeps,
+  interpretedMeta: AiMeta | null = null,
 ): Promise<SentMessage[]> {
   const { store, ai, sender } = deps;
 
   if (result.deferToAi) {
-    // Try structured interpretation first (stub returns null).
-    if (result.deferToAi.interpret) {
+    // Try structured interpretation first (stub returns null). The
+    // interpretedMeta guard prevents an interpret → defer → interpret loop.
+    if (result.deferToAi.interpret && !interpretedMeta) {
       const { field, options } = result.deferToAi.interpret;
       const interp = await ai.interpretStepAnswer({
         text: rawText(input),
@@ -244,13 +246,23 @@ async function applyResult(
           value: interp.value,
           raw: interp.raw,
         });
-        return applyResult(person, instance, flow, ctx, input, result2, deps);
+        return applyResult(
+          person,
+          instance,
+          flow,
+          ctx,
+          input,
+          result2,
+          deps,
+          interp.meta,
+        );
       }
     }
     // Answer from the KB, then re-ask the pending question.
     const hasCompleted = await hasCompletedSurvey(store, person.id);
     const answer = await ai.answerQuestion({
       question: rawText(input),
+      personId: person.id,
       displayName: person.display_name ?? undefined,
       hasCompletedSurvey: hasCompleted,
       hasPendingQuestion: true,
@@ -288,7 +300,10 @@ async function applyResult(
     }
   }
 
-  return sender.send(person, result.messages, { flowInstanceId: instance.id });
+  return sender.send(person, result.messages, {
+    flowInstanceId: instance.id,
+    aiMeta: interpretedMeta,
+  });
 }
 
 // --- Start / resume (PLAN 4.4 + returning-completed edge case) ------------
@@ -363,6 +378,7 @@ async function aiFallback(
   const hasCompleted = await hasCompletedSurvey(deps.store, person.id);
   const answer = await deps.ai.answerQuestion({
     question: rawText(input),
+    personId: person.id,
     displayName: person.display_name ?? undefined,
     hasCompletedSurvey: hasCompleted,
     hasPendingQuestion: activeInstance !== null,

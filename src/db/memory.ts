@@ -11,18 +11,21 @@ import type {
   FlowInstanceRow,
   InsertInboundInput,
   InsertOutboundInput,
+  KbEntryRow,
   MessageRow,
   PersonRow,
   Store,
   UpdateFlowInput,
+  UpsertKbEntryInput,
 } from "./store.ts";
 
 export class MemoryStore implements Store {
   private people: PersonRow[] = [];
   private flows: FlowInstanceRow[] = [];
   private messages: MessageRow[] = [];
+  private kb: KbEntryRow[] = [];
   private settings = new Map<string, string>();
-  private seq = { person: 0, flow: 0, message: 0 };
+  private seq = { person: 0, flow: 0, message: 0, kb: 0 };
 
   constructor() {
     this.settings.set("course_status", "exploring");
@@ -214,8 +217,43 @@ export class MemoryStore implements Store {
     return this.settings.get(key) ?? null;
   }
 
-  async setSetting(key: string, value: string): Promise<void> {
+  async setSetting(key: string, value: string, _at?: string): Promise<void> {
     this.settings.set(key, value);
+  }
+
+  // Knowledge base ----------------------------------------------------------
+  async listKbEntries(activeOnly = false): Promise<KbEntryRow[]> {
+    return this.kb
+      .filter((e) => !activeOnly || e.active === 1)
+      .sort((a, b) => a.slug.localeCompare(b.slug))
+      .map((e) => ({ ...e }));
+  }
+
+  async upsertKbEntry(input: UpsertKbEntryInput): Promise<KbEntryRow> {
+    const existing = this.kb.find((e) => e.slug === input.slug);
+    if (existing) {
+      existing.title = input.title;
+      existing.content_md = input.contentMd;
+      existing.active = input.active ? 1 : 0;
+      existing.updated_at = input.at;
+      return { ...existing };
+    }
+    const row: KbEntryRow = {
+      id: ++this.seq.kb,
+      slug: input.slug,
+      title: input.title,
+      content_md: input.contentMd,
+      active: input.active ? 1 : 0,
+      updated_at: input.at,
+    };
+    this.kb.push(row);
+    return { ...row };
+  }
+
+  async deleteKbEntry(id: number): Promise<boolean> {
+    const before = this.kb.length;
+    this.kb = this.kb.filter((e) => e.id !== id);
+    return this.kb.length < before;
   }
 
   // Admin -----------------------------------------------------------------

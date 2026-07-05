@@ -15,6 +15,12 @@ export interface Env {
   CF_ACCESS_AUD?: string;
   CF_ACCESS_EMAIL_DOMAIN?: string;
 
+  /**
+   * Live agenda feed (the landing's events collection as JSON). Unset or
+   * "off" disables the fetch (e.g. in unit tests).
+   */
+  EVENTS_JSON_URL?: string;
+
   // --- Meta WhatsApp Cloud API ---
   /** "true" enables real outbound sends; anything else = log-only no-op. */
   WA_ENABLED?: string;
