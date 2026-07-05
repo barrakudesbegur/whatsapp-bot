@@ -34,14 +34,16 @@ import {
  * Default text model, overridable per-environment via the `AI_MODEL` var (see
  * wrangler.jsonc) so the model is CONFIGURATION, swappable without a code change.
  *
- * Gemma 4 succeeds the previous default `@cf/google/gemma-3-12b-it`, which
- * Workers AI sunset after its 2026-05-30 deprecation — calls started returning
- * 5018 ("account not allowed to access this model") and every answer silently
- * degraded to the canned line. Compare candidates with `node scripts/eval-catalan.ts`:
- *   "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+ * History: the original default `@cf/google/gemma-3-12b-it` was sunset after its
+ * 2026-05-30 deprecation — calls returned 5018 ("account not allowed to access
+ * this model") and every answer silently degraded to the canned line. Its
+ * successor `@cf/google/gemma-4-26b-a4b-it` runs but is far too slow for chat
+ * (multi-minute responses in prod). Llama 3.3 70B (fp8, speed-optimized) answers
+ * in a few seconds with strong Catalan. Compare with `node scripts/eval-catalan.ts`:
+ *   "@cf/google/gemma-4-26b-a4b-it"     (higher quality, too slow for live chat)
  *   "@cf/mistralai/mistral-small-3.1-24b-instruct"
  */
-export const PRIMARY_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+export const PRIMARY_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 interface ChatResult {
 	response?: string;
