@@ -11,7 +11,7 @@
   saber-ne gens.
 - **On seria?** A Begur; el lloc exacte encara no està decidit.
 - **Com dic que m'interessa?** Contestant l'enquesta d'en Kudi per WhatsApp
-  (escriu «Explica'm això del curs de sardanes») o, si no tens WhatsApp, al
-  formulari de https://sardanes.barrakudesbegur.org/formulari
+  (només cal dir-li que t'interessa el curs, com et surti) o, si no tens
+  WhatsApp, al formulari de https://sardanes.barrakudesbegur.org/formulari
 - **I si tira endavant?** Muntarem un grup de WhatsApp per organitzar-ho i
   avisarem tothom que s'hagi apuntat.

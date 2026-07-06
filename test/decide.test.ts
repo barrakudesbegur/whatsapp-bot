@@ -4,12 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-	parseDecision,
-	extractJson,
-	fallbackDecision,
-	DECISION_JSON_SCHEMA
-} from '../src/lib/server/ai/decide.ts';
+import { parseDecision, extractJson, fallbackDecision } from '../src/lib/server/ai/decide.ts';
 import { makeState } from './util.ts';
 
 describe('extractJson', () => {
@@ -174,16 +169,5 @@ describe('fallbackDecision', () => {
 		);
 		expect(d.actions).toEqual([]);
 		expect(d.replies[0]!.text).toContain('Instagram');
-	});
-});
-
-describe('DECISION_JSON_SCHEMA', () => {
-	it('enumerates exactly the whitelisted action types', () => {
-		const types: readonly string[] =
-			DECISION_JSON_SCHEMA.properties.actions.items.properties.type.enum;
-		expect(types).toContain('set_display_name');
-		expect(types).toContain('record_availability');
-		expect(types).not.toContain('confirm_erasure'); // deletion is email-only, never chat
-		expect(types).not.toContain('teleport');
 	});
 });

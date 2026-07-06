@@ -7,7 +7,6 @@
  * (buttons/list) the model generates to make answering easy.
  *
  * The model only ever PROPOSES. This module is where code stays the authority:
- *  - `DECISION_JSON_SCHEMA` is sent as Workers AI `response_format` (best effort).
  *  - `extractJson` recovers JSON even when a model wraps it in prose/fences.
  *  - `parseDecision` validates with valibot and DROPS anything off-whitelist, so a
  *    hallucinated/injected action can never take effect.
@@ -127,80 +126,10 @@ export interface Decider {
 	decide(state: DecisionState): Promise<DecideOutput>;
 }
 
-// --- The JSON schema sent to the model as response_format -----------------
-// Flat action objects (only `type` required, per-type fields optional) — strict
-// conditional-requireds are unreliable on mid-size models. Code validates for real.
-
-export const DECISION_JSON_SCHEMA = {
-	type: 'object',
-	additionalProperties: false,
-	required: ['replies', 'actions'],
-	properties: {
-		replies: {
-			type: 'array',
-			minItems: 1,
-			maxItems: 10,
-			items: {
-				type: 'object',
-				additionalProperties: false,
-				required: ['text'],
-				properties: {
-					text: { type: 'string', maxLength: 1024 },
-					control: {
-						type: 'object',
-						additionalProperties: false,
-						required: ['kind'],
-						properties: {
-							kind: { type: 'string', enum: ['none', 'buttons', 'list'] },
-							label: { type: 'string', maxLength: 20 },
-							options: {
-								type: 'array',
-								maxItems: 10,
-								items: {
-									type: 'object',
-									additionalProperties: false,
-									required: ['title'],
-									properties: {
-										title: { type: 'string', maxLength: 24 },
-										description: { type: 'string', maxLength: 72 }
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		actions: {
-			type: 'array',
-			maxItems: 4,
-			items: {
-				type: 'object',
-				additionalProperties: false,
-				required: ['type'],
-				properties: {
-					type: {
-						type: 'string',
-						enum: [
-							'set_display_name',
-							'record_signup',
-							'record_availability',
-							'start_survey',
-							'restart_survey',
-							'decline_survey'
-						]
-					},
-					name: { type: 'string', maxLength: 40 },
-					choice: { type: 'string', enum: [...SIGNUP_CHOICES] },
-					bucket: { type: 'string', enum: [...AVAILABILITY_BUCKETS] },
-					note: { type: 'string', maxLength: 280 }
-				}
-			}
-		}
-	}
-} as const;
-
 // --- Validation (what code trusts) ----------------------------------------
+// (Workers AI JSON mode was removed: response_format json_schema failed live
+// with AiError 5024 after 30–90 s per turn. The prompt's output contract +
+// extractJson + this valibot validation are the real contract.)
 
 const NAME_MAX = 40;
 const NOTE_MAX = 280;

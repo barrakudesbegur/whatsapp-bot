@@ -2,7 +2,11 @@
  * Builds the messages for the single decide() call. Pure — unit-tested without a
  * model. The system prompt gives Kudi its voice, the current submission draft
  * (what's known / still missing), the whitelisted actions, the anti-rigidity
- * rules, and the knowledge base; the user message is the fenced inbound text.
+ * rules, and the knowledge base. The conversation history goes in as REAL
+ * user/assistant turns (not narrated text): chat-tuned models key on turn
+ * structure, and a bare «sí» is only unambiguous as an answer when the model's
+ * own previous question is an actual assistant turn. The current inbound is the
+ * final, fenced user message.
  *
  * Design intent (owner): the model UNDERSTANDS every message, DECIDES what to do,
  * ACTS via actions, and stays flexible — it must never get stuck demanding a
@@ -12,13 +16,41 @@
 import type { DecisionState } from './decide.ts';
 import { SIGNUP_LABELS, AVAILABILITY_LABELS } from '../survey/spec.ts';
 
-export function buildDecideMessages(
-	state: DecisionState
-): { role: 'system' | 'user'; content: string }[] {
+export type DecideMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+export function buildDecideMessages(state: DecisionState): DecideMessage[] {
 	return [
 		{ role: 'system', content: systemPrompt(state) },
+		...transcriptTurns(state.transcript),
 		{ role: 'user', content: userBlock(state) }
 	];
+}
+
+/**
+ * The stored transcript as real chat turns, kudi → assistant. Consecutive
+ * same-role lines (multi-bubble replies) are merged into one message so the
+ * array alternates cleanly — some chat templates mishandle back-to-back turns.
+ *
+ * Assistant turns are rendered in the SAME JSON shape the model must produce
+ * (`{"replies":[{"text":…}]}`): plain-prose assistant turns teach the model to
+ * answer in plain prose (observed live — bubble text followed by a JSON
+ * fragment), while JSON turns keep every prior example on-contract.
+ */
+function transcriptTurns(transcript: { role: 'user' | 'kudi'; text: string }[]): DecideMessage[] {
+	const grouped: { role: 'user' | 'assistant'; texts: string[] }[] = [];
+	for (const line of transcript) {
+		const role = line.role === 'kudi' ? 'assistant' : 'user';
+		const last = grouped[grouped.length - 1];
+		if (last && last.role === role) last.texts.push(line.text);
+		else grouped.push({ role, texts: [line.text] });
+	}
+	return grouped.map(({ role, texts }) => ({
+		role,
+		content:
+			role === 'assistant'
+				? JSON.stringify({ replies: texts.map((text) => ({ text })) })
+				: texts.join('\n')
+	}));
 }
 
 function systemPrompt(state: DecisionState): string {
@@ -27,7 +59,7 @@ function systemPrompt(state: DecisionState): string {
 	// --- Identity + voice ---
 	parts.push(
 		"Ets en Kudi, el nino taronja del logo dels Barrakudes de Begur. Parles per WhatsApp en nom de l'associació de joves de Begur, com un membre més.",
-		'IDENTITAT: parla amb naturalitat, com una persona. NO diguis MAI que ets un «bot» ni facis servir aquesta paraula per referir-te a tu. Si et pregunten si ets una persona, o cal aclarir-ho, digues amb naturalitat que ets una IA (intel·ligència artificial) dels Barrakudes — i continua la conversa tan normal.',
+		'IDENTITAT: parla amb naturalitat, com una persona. NO diguis MAI que ets un «bot» ni facis servir aquesta paraula per referir-te a tu. NOMÉS si et pregunten directament si ets una persona (o si ets un robot, una màquina, una IA…), digues amb naturalitat que ets una IA (intel·ligència artificial) dels Barrakudes — i continua la conversa tan normal. Si no t’ho pregunten, NO ho esmentis mai pel teu compte ni t’hi presentis.',
 		'VEU: català informal (sempre de tu), càlid, una mica murri. Parla sempre en català, tret que la persona et parli clarament en un altre idioma.',
 		'BREVETAT (REGLA D’OR): les teves respostes són MOLT CURTES — 1 a 3 frases i com a màxim 2 emojis, com un missatge de WhatsApp normal. Només t’allargues si la persona demana explícitament més detall. Pots fer més d’una pregunta si té sentit i el missatge segueix sent curt, però MAI repeteixis una pregunta ni abocs tot el qüestionari de cop.',
 		'FORMAT: pots donar format amb el marcatge de WhatsApp: *negreta*, _cursiva_, ~ratllat~ i ```monospace```. Fes-lo servir amb mesura, només quan aporti.'
@@ -93,7 +125,8 @@ function systemPrompt(state: DecisionState): string {
 			'- Si es NEGUEN a donar-te el nom, no insisteixis: digue’ls que de moment els dius «Anònim» (emet set_display_name amb name "Anònim") i CONTINUA amb la conversa. Però NO esmentis MAI aquesta opció d’entrada — és el recurs per a l’excepció, no forma part de la pregunta.\n' +
 			'- Pots fer diverses coses a la vegada: respondre una pregunta I desar una dada en el mateix torn.\n' +
 			'- Poden canviar respostes anteriors quan vulguin; actualitza-les sense embuts.\n' +
-			'- Quan encara falten dades (mira «FALTA» a sota), demana la següent (o un parell, si el missatge segueix sent curt) de manera natural dins la teva resposta. Quan no en falta cap, tanca amb un missatge maco i sense cap control.'
+			'- Quan encara falten dades (mira «FALTA» a sota), demana la següent (o un parell, si el missatge segueix sent curt) de manera natural dins la teva resposta. Quan no en falta cap, tanca amb un missatge maco i sense cap control.\n' +
+			'- MIRA SEMPRE la conversa anterior. Si el teu últim missatge feia una pregunta i la persona hi respon (encara que sigui només «sí», «no» o una opció tocada), ACTUA sobre la resposta: fes el que oferies o passa al següent pas. MAI tornis a fer la mateixa pregunta, MAI et tornis a presentar si ja us heu saludat, i no repeteixis informació que ja has donat.'
 	);
 
 	// --- Options / control ---
@@ -115,7 +148,9 @@ function systemPrompt(state: DecisionState): string {
 			'Persona: «no te’l vull donar» (demanant el nom) →\n' +
 			'{"replies":[{"text":"Cap problema! De moment et dic Anònim 😊"},{"text":"Va: quan sapiguem si es fa el curs, què vols que faci?","control":{"kind":"buttons","options":[{"title":"Afegeix-me al grup"},{"title":"Només avisa’m"},{"title":"Res, gràcies"}]}}],"actions":[{"type":"set_display_name","name":"Anònim"}]}\n' +
 			'Persona: «quant costa el curs?» →\n' +
-			'{"replies":[{"text":"Encara no ho sabem — primer volem veure si hi ha prou gent interessada 😊"}],"actions":[]}'
+			'{"replies":[{"text":"Encara no ho sabem — primer volem veure si hi ha prou gent interessada 😊"}],"actions":[]}\n' +
+			'(El teu últim missatge era «Vols que t’expliqui què és?») Persona: «sí» → RESPONS el que oferies, sense repetir la pregunta:\n' +
+			'{"replies":[{"text":"És una idea que estem explorant: un curs per aprendre a ballar sardanes a Begur, en cap de setmana. Encara no està confirmat — primer mirem si hi ha prou gent 😊"},{"text":"T’hi vols apuntar? Digue’m com et dius i t’ho apunto!"}],"actions":[{"type":"start_survey"}]}'
 	);
 
 	// --- Grounding ---
@@ -127,16 +162,9 @@ function systemPrompt(state: DecisionState): string {
 
 	parts.push('\n' + state.kb);
 
-	if (state.transcript.length > 0) {
-		parts.push(
-			'\n## DARRERS MISSATGES\n' +
-				state.transcript
-					.map((t) => `${t.role === 'user' ? 'Persona' : 'Kudi'}: ${t.text}`)
-					.join('\n')
-		);
-	}
-
 	// --- Output contract ---
+	// (The conversation history is NOT narrated here — it goes in as real
+	// user/assistant turns; see buildDecideMessages.)
 	parts.push(
 		'\n## FORMAT DE RESPOSTA\n' +
 			'Respon NOMÉS amb un JSON: {"replies":[{"text":"<bombolla curta>","control":{...opcional...}}, ...],"actions":[...]}. ' +
@@ -160,5 +188,8 @@ function draftSummary(state: DecisionState): string {
 
 function userBlock(state: DecisionState): string {
 	const note = state.tapped ? ' (la persona ha TOCAT aquesta opció)' : '';
-	return `Missatge de la persona${note}:\n<missatge>\n${state.userMessage}\n</missatge>`;
+	return (
+		`Missatge de la persona${note}:\n<missatge>\n${state.userMessage}\n</missatge>\n` +
+		'(Recorda: respon NOMÉS amb el JSON {"replies":[…],"actions":[…]} — cap text fora del JSON.)'
+	);
 }

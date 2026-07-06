@@ -1,22 +1,25 @@
 /**
  * Production Decider: one Workers AI call per turn, hardened so correctness never
- * depends on the model obeying the schema.
+ * depends on the model obeying the prompt.
+ *
+ * The call is a PLAIN chat completion — no `response_format`. Workers AI JSON
+ * mode (json_schema) failed live with "AiError 5024: JSON Mode couldn't be met"
+ * after 30–90 s of constrained decoding on EVERY turn, while the unconstrained
+ * retry answered in ~3 s; the prompt's output contract + `extractJson` +
+ * `parseDecision` (valibot whitelist) recover and validate the JSON instead,
+ * tolerating prose and fences.
  *
  * Degradation ladder (a degraded turn NEVER mutates state — fallbackDecision
  * carries no actions):
- *   1. env.AI.run with `response_format` json_schema → parse → validate.
- *   2. If the binding rejects response_format, retry once without it (extractJson
- *      still recovers JSON from prose/fences) — so a picky model can't silently
- *      disable the AI.
- *   3. Unusable/garbage output or a thrown error → fallbackDecision(state).
+ *   1. env.AI.run, bounded by a hard timeout → extractJson/parseDecision.
+ *   2. Unusable/garbage output, a thrown error, or a timeout → fallbackDecision.
  *
  * Model is CONFIG: `AI_MODEL` overrides PRIMARY_MODEL (currently Llama 3.3 70B
- * fp8-fast — fast + strong Catalan + reliable JSON).
+ * fp8-fast — fast + strong Catalan).
  */
 
 import type { Env } from '../types.ts';
 import {
-	DECISION_JSON_SCHEMA,
 	fallbackDecision,
 	parseDecision,
 	type AiMeta,
@@ -24,39 +27,48 @@ import {
 	type DecideOutput,
 	type DecisionState
 } from './decide.ts';
-import { buildDecideMessages } from './decide-prompt.ts';
+import { buildDecideMessages, type DecideMessage } from './decide-prompt.ts';
 
 /** Default model, overridable per-environment via the `AI_MODEL` var (config, no code change). */
 export const PRIMARY_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
-// Generation is deliberately constrained: Kudi's bubbles must be SHORT (owner
-// requirement), and fp8 long generations degenerate into repeating the same
-// questions until the token budget runs out (observed live). The repetition/
-// frequency penalties break that loop, low temperature keeps decisions precise,
-// and max_tokens bounds the damage while leaving room for multi-bubble replies.
-const MAX_TOKENS = 512;
+// Generation bounds. Kudi's bubbles must be SHORT (owner requirement), so
+// max_tokens caps the damage of a rambling turn while leaving room for
+// multi-bubble JSON. The penalties are MILD on purpose: the aggressive values
+// tried before (repetition 1.2 + frequency 0.4) corrupted Catalan morphology
+// ("t'explichi") by pre-penalizing correct tokens already present in the large
+// prompt — and cross-turn re-asking is prevented by real transcript turns in
+// the prompt, not by decoding penalties.
+const MAX_TOKENS = 1024;
 const TEMPERATURE = 0.3;
-const REPETITION_PENALTY = 1.2;
-const FREQUENCY_PENALTY = 0.4;
+const REPETITION_PENALTY = 1.05;
+const FREQUENCY_PENALTY = 0.1;
+
+// Hard cap on model think-time. Production saw a 195 s hang (gemma-4) and
+// 30–90 s constrained-decoding stalls; WhatsApp's typing indicator lasts ~25 s,
+// so past ~20 s the person is staring at silence — better to trip the
+// deterministic fallback than keep them waiting.
+const TIMEOUT_MS = 20_000;
 
 interface ChatResult {
 	response?: unknown;
 	usage?: { total_tokens?: number };
 }
-type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 type RunInput = {
-	messages: ChatMessage[];
+	messages: DecideMessage[];
 	max_tokens?: number;
 	temperature?: number;
 	repetition_penalty?: number;
 	frequency_penalty?: number;
-	response_format?: unknown;
 };
 
 export class WorkersAiDecider implements Decider {
 	private readonly model: string;
 
-	constructor(private readonly env: Env) {
+	constructor(
+		private readonly env: Env,
+		private readonly timeoutMs: number = TIMEOUT_MS
+	) {
 		this.model = env.AI_MODEL?.trim() || PRIMARY_MODEL;
 	}
 
@@ -78,29 +90,26 @@ export class WorkersAiDecider implements Decider {
 		}
 	}
 
-	private async run(messages: ChatMessage[]): Promise<unknown> {
+	private run(messages: DecideMessage[]): Promise<unknown> {
 		// Call through env.AI (a detached `run` loses its `this` and throws).
 		const ai = this.env.AI as unknown as {
 			run(model: string, input: RunInput): Promise<unknown>;
 		};
-		const params = {
+		const input: RunInput = {
+			messages,
 			max_tokens: MAX_TOKENS,
 			temperature: TEMPERATURE,
 			repetition_penalty: REPETITION_PENALTY,
 			frequency_penalty: FREQUENCY_PENALTY
 		};
-		try {
-			return await ai.run(this.model, {
-				messages,
-				...params,
-				response_format: { type: 'json_schema', json_schema: DECISION_JSON_SCHEMA }
-			});
-		} catch (err) {
-			// A model/binding that rejects response_format must not disable the AI —
-			// retry once relying on the prompt + extractJson to recover the JSON.
-			console.error('decide(): response_format rejected → retrying without it', err);
-			return await ai.run(this.model, { messages, ...params });
-		}
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timedOut = new Promise<never>((_, reject) => {
+			timer = setTimeout(
+				() => reject(new Error(`decide(): model call timed out after ${this.timeoutMs}ms`)),
+				this.timeoutMs
+			);
+		});
+		return Promise.race([ai.run(this.model, input), timedOut]).finally(() => clearTimeout(timer));
 	}
 
 	private meta(t0: number, tokens?: number): AiMeta {
@@ -116,7 +125,7 @@ function textOf(res: unknown): string {
 	if (typeof res === 'string') return res;
 	const r = res as ChatResult | null;
 	if (typeof r?.response === 'string') return r.response;
-	// Some JSON-mode responses arrive already parsed — re-stringify for extractJson.
+	// Some responses arrive already parsed — re-stringify for extractJson.
 	if (r?.response && typeof r.response === 'object') {
 		try {
 			return JSON.stringify(r.response);

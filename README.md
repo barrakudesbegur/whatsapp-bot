@@ -53,9 +53,9 @@ Browser (admin SPA) ──▶ src/routes/admin/*.remote.ts  (query/command; each
 | `src/routes/admin/`                       | Admin page (`+page.svelte` tab shell) + `data.remote.ts` / `simulate.remote.ts` + CSV endpoint.           |
 | `src/hooks.server.ts`                     | Cloudflare Access gate for `/admin` pages (fail closed; `DEV_ACCESS_BYPASS` locally).                     |
 | `src/lib/server/router.ts`                | The AI-first pipeline above; the only deterministic branches are language-free.                           |
-| `src/lib/server/ai/decide.ts`             | **The decision contract**: types, JSON schema, valibot validation, JSON recovery, deterministic fallback. |
-| `src/lib/server/ai/decide-prompt.ts`      | Builds the decide() messages: persona, draft state, actions, anti-rigidity rules, few-shot examples, KB.  |
-| `src/lib/server/ai/workers-ai-decider.ts` | Production `Decider`: Workers AI + `response_format` json_schema, low temperature, degradation ladder.    |
+| `src/lib/server/ai/decide.ts`             | **The decision contract**: types, valibot validation, JSON recovery, deterministic fallback.              |
+| `src/lib/server/ai/decide-prompt.ts`      | Builds the decide() messages: persona, draft state, actions, rules, few-shots, KB, real transcript turns. |
+| `src/lib/server/ai/workers-ai-decider.ts` | Production `Decider`: one plain Workers AI chat call, hard timeout, low temperature, degradation ladder.  |
 | `src/lib/server/ai/scripted-decider.ts`   | Deterministic `Decider` for tests (enqueue decisions; counts calls).                                      |
 | `src/lib/server/ai/prompt.ts`             | `buildKbBlock` — folds static KB + `kb_entries` + course status + live agenda.                            |
 | `src/lib/server/survey/spec.ts`           | Declarative survey field spec + pure `deriveMissing` / `deriveStatus` (code owns completion).             |
@@ -132,7 +132,7 @@ own tappable options.
 | Binding | Type       | Notes                                                                                           |
 | ------- | ---------- | ----------------------------------------------------------------------------------------------- |
 | `DB`    | D1         | `database_name` = `whatsapp-bot`. `database_id` is set; run `wrangler d1 create` if recreating. |
-| `AI`    | Workers AI | Kudi's understanding (`decide()`), JSON mode.                                                   |
+| `AI`    | Workers AI | Kudi's understanding (`decide()`), plain chat completion.                                       |
 
 ### Vars (`wrangler.jsonc`) / Secrets (`wrangler secret put`; `.dev.vars` locally)
 
@@ -196,19 +196,23 @@ Tu: /tap 4
 ## AI — Kudi's brain
 
 The model is **configuration**: `AI_MODEL` var, default
-`@cf/meta/llama-3.3-70b-instruct-fp8-fast` (fast, strong Catalan, reliable
-JSON). The decide() call uses Workers AI **JSON mode**
-(`response_format: {type: 'json_schema', …}`) plus a low temperature; the prompt
-(`ai/decide-prompt.ts`, pure + unit-tested) carries Kudi's persona and voice,
-WhatsApp text formatting (`*bold*` etc.), the submission draft + missing fields,
-the action whitelist, anti-rigidity rules (never demand a specific sentence;
-"won't give a name" → call them Anònim and continue), few-shot examples, the KB
-(static `kb/*.md` + admin-editable `kb_entries` + `settings.course_status` + the
-live agenda from `EVENTS_JSON_URL`, fail-soft) and a transcript snippet.
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast` (fast, strong Catalan). The decide()
+call is a **plain chat completion** — Workers AI JSON mode was removed after it
+failed live with `AiError 5024: JSON Mode couldn't be met` after 30–90 s of
+constrained decoding per turn, while the plain call answers in seconds; the
+prompt's output contract + `extractJson` + valibot validation are the real
+contract. The prompt (`ai/decide-prompt.ts`, pure + unit-tested) carries Kudi's
+persona and voice, WhatsApp text formatting (`*bold*` etc.), the submission
+draft + missing fields, the action whitelist, anti-rigidity rules (never demand
+a specific sentence; "won't give a name" → call them Anònim and continue),
+few-shot examples and the KB (static `kb/*.md` + admin-editable `kb_entries` +
+`settings.course_status` + the live agenda from `EVENTS_JSON_URL`, fail-soft).
+The conversation history goes in as **real user/assistant turns** (not narrated
+text) so the model treats a bare «sí» as an answer to its own previous message.
 
-Degradation ladder (`ai/workers-ai-decider.ts`): JSON-mode call → if the binding
-rejects `response_format`, retry without it (a brace-matching `extractJson`
-recovers JSON from prose/fences) → anything unusable → deterministic Catalan
+Degradation ladder (`ai/workers-ai-decider.ts`): one model call bounded by a
+**hard 20 s timeout** → a brace-matching `extractJson` recovers JSON from
+prose/fences → anything unusable, thrown or timed out → deterministic Catalan
 fallback with **no actions**. The webhook never crashes; a degraded turn never
 mutates state.
 

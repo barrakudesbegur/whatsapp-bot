@@ -1,10 +1,12 @@
 /**
  * Manual decision-quality eval across Workers AI models.
  *
- * Runs sample Catalan utterances through the REAL decide() prompt + JSON schema
- * (the same contract production uses) via the Workers AI REST API, and prints
- * each model's reply, actions and generated options side by side — so a human
- * can judge Catalan voice AND structured-decision reliability together.
+ * Runs sample Catalan utterances through the REAL decide() prompt and parsing
+ * (the same contract production uses: plain chat completion, NO response_format
+ * — JSON mode was removed after live 5024 failures) via the Workers AI REST
+ * API, and prints each model's reply, actions and generated options side by
+ * side — so a human can judge Catalan voice AND structured-decision reliability
+ * together.
  *
  * Requires (Workers AI needs Cloudflare auth even for evals):
  *   CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... node scripts/eval-catalan.ts
@@ -13,11 +15,7 @@
 
 import { readFileSync } from 'node:fs';
 import { buildDecideMessages } from '../src/lib/server/ai/decide-prompt.ts';
-import {
-	DECISION_JSON_SCHEMA,
-	parseDecision,
-	type DecisionState
-} from '../src/lib/server/ai/decide.ts';
+import { parseDecision, type DecisionState } from '../src/lib/server/ai/decide.ts';
 import { buildKbBlock } from '../src/lib/server/ai/prompt.ts';
 
 const MODELS = [
@@ -182,10 +180,14 @@ async function run(model: string, c: Case): Promise<{ text: string; ms: number }
 		{
 			method: 'POST',
 			headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+			// Mirror the production call (workers-ai-decider.ts): plain completion,
+			// no response_format, same generation bounds.
 			body: JSON.stringify({
 				messages: buildDecideMessages(c.state),
-				max_tokens: 512,
-				response_format: { type: 'json_schema', json_schema: DECISION_JSON_SCHEMA }
+				max_tokens: 1024,
+				temperature: 0.3,
+				repetition_penalty: 1.05,
+				frequency_penalty: 0.1
 			})
 		}
 	);

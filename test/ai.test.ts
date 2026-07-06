@@ -104,6 +104,54 @@ describe('buildDecideMessages', () => {
 		expect(user!.content).toContain('TOCAT');
 	});
 
+	it('renders the transcript as REAL user/assistant turns, current inbound last', () => {
+		const messages = buildDecideMessages(
+			makeState({
+				transcript: [
+					{ role: 'user', text: 'Hola' },
+					{ role: 'kudi', text: 'Ei! Vols que t’expliqui què és?' }
+				],
+				userMessage: 'sí'
+			})
+		);
+		expect(messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+		expect(messages[1]!.content).toBe('Hola');
+		// Assistant turns are rendered on-contract (JSON), so the model keeps
+		// answering in JSON instead of imitating plain-prose history.
+		expect(messages[2]!.content).toBe(
+			JSON.stringify({ replies: [{ text: 'Ei! Vols que t’expliqui què és?' }] })
+		);
+		expect(messages[3]!.content).toContain('sí');
+		// The history must NOT be narrated inside the system prompt anymore.
+		expect(messages[0]!.content).not.toContain('DARRERS MISSATGES');
+		expect(messages[0]!.content).not.toContain('Ei! Vols que t’expliqui');
+	});
+
+	it('merges consecutive same-role transcript lines (multi-bubble replies) into one turn', () => {
+		const messages = buildDecideMessages(
+			makeState({
+				transcript: [
+					{ role: 'kudi', text: 'Genial!' },
+					{ role: 'kudi', text: 'I quan et va bé?' },
+					{ role: 'user', text: 'dissabtes' },
+					{ role: 'user', text: 'o diumenges' }
+				],
+				userMessage: 'gràcies'
+			})
+		);
+		expect(messages.map((m) => m.role)).toEqual(['system', 'assistant', 'user', 'user']);
+		expect(messages[1]!.content).toBe(
+			JSON.stringify({ replies: [{ text: 'Genial!' }, { text: 'I quan et va bé?' }] })
+		);
+		expect(messages[2]!.content).toBe('dissabtes\no diumenges');
+	});
+
+	it('tells the model to act on answers instead of re-asking or re-introducing itself', () => {
+		const [system] = buildDecideMessages(makeState());
+		expect(system!.content).toContain('MAI tornis a fer la mateixa pregunta');
+		expect(system!.content).toContain('NOMÉS si et pregunten directament');
+	});
+
 	it('embeds the KB', () => {
 		const [system] = buildDecideMessages(makeState({ kb: 'THE-KB-BLOCK' }));
 		expect(system!.content).toContain('THE-KB-BLOCK');
