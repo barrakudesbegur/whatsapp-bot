@@ -110,8 +110,8 @@
 		</div>
 		<button class="btn ghost small" onclick={fresh}>Persona nova (reinicia)</button>
 		<p class="muted">
-			Escriu com si fossis la persona. Pots provar el trigger:
-			<em>Explica'm això del curs de sardanes</em>
+			Escriu com si fossis la persona (en Kudi entén text lliure). Per exemple:
+			<em>Explica'm això del curs de sardanes 💃</em>
 		</p>
 	</div>
 </div>

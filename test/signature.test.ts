@@ -1,5 +1,5 @@
 /**
- * X-Hub-Signature-256 verification vectors (PLAN 4.1 / 4.8). Uses real
+ * X-Hub-Signature-256 verification vectors. Uses real
  * WebCrypto (globalThis.crypto) — no mocks.
  */
 

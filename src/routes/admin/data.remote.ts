@@ -1,5 +1,5 @@
 /**
- * Inbox admin data (PLAN 4.7) as SvelteKit remote functions — the type-safe
+ * Inbox admin data as SvelteKit remote functions — the type-safe
  * replacement for the old hand-written `/admin/api/*` Hono routes + fetch client.
  *
  * SECURITY: every function calls `requireAdmin()` first. The /admin hook gate

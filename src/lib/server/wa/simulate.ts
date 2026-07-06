@@ -1,5 +1,5 @@
 /**
- * Simulator → webhook synthesizer (PLAN 4.8 / step 8).
+ * Simulator → webhook synthesizer.
  *
  * Builds a realistic Cloud API webhook envelope from a compact simulator request
  * so `/dev/simulate` can drive the SAME router code path (minus the signature

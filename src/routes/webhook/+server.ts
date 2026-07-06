@@ -1,5 +1,5 @@
 /**
- * Meta WhatsApp Cloud API webhook (PLAN 4.1). This is a plain endpoint (NOT a
+ * Meta WhatsApp Cloud API webhook. This is a plain endpoint (NOT a
  * remote function): Meta is an external caller that POSTs its own JSON to a
  * fixed URL and signs it with `X-Hub-Signature-256` over the RAW body, so we
  * need the untouched request. Public — the /admin gate in hooks.server.ts does

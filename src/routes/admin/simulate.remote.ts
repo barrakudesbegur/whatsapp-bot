@@ -1,5 +1,5 @@
 /**
- * Dev-only simulator (PLAN 4.7 / 4.8). Synthesizes a Cloud API webhook and runs
+ * Dev-only simulator. Synthesizes a Cloud API webhook and runs
  * the SAME router path as the real webhook — minus the signature check — so the
  * whole flow is drivable without Meta. Guarded by `requireAdmin()` AND the
  * DEV_SIMULATOR switch, so it is inert unless explicitly enabled.

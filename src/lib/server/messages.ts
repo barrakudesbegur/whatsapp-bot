@@ -43,9 +43,9 @@ export type OutMessage =
 			rows: ListRow[];
 	  };
 
-// WhatsApp interactive limits (verified against the current Cloud API docs). See
-// PLAN 4.4 / section 8. `validateOutMessage` enforces them; a flow-copy test
-// asserts every message the curs-sardanes flow emits stays within them.
+// WhatsApp interactive limits (verified against the current Cloud API docs).
+// `validateOutMessage` enforces them; applyDecision clamps/degrades any
+// model-generated control that doesn't fit.
 export const LIMITS = {
 	BODY_MAX: 1024,
 	HEADER_MAX: 60,

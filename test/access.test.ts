@@ -1,5 +1,5 @@
 /**
- * Access token extraction (PLAN 4.8 bugfix). Cloudflare Access only injects the
+ * Access token extraction. Cloudflare Access only injects the
  * `Cf-Access-Jwt-Assertion` header on Access-routed paths (our /admin page), not
  * on SvelteKit remote-function calls to `/_app/remote/*`. `readAccessToken()`
  * falls back to the host-scoped `CF_Authorization` cookie, which the browser

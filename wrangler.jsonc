@@ -28,7 +28,7 @@
 			"migrations_dir": "migrations"
 		}
 	],
-	// Workers AI — Kudi's free-text fallback (Gemma 3).
+	// Workers AI — Kudi's understanding (one decide() call per message).
 	"ai": {
 		"binding": "AI"
 	},

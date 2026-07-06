@@ -1,5 +1,5 @@
 /**
- * Static knowledge base, versioned in the repo (PLAN 4.6, layer 1). The .md
+ * Static knowledge base, versioned in the repo. The .md
  * files live next to this module and are imported as plain text via Vite's
  * `?raw` suffix (typed as string by vite/client). scripts/eval-catalan.ts reads
  * the same files from disk instead.
