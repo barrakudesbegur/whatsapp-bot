@@ -211,7 +211,7 @@ The conversation history goes in as **real user/assistant turns** (not narrated
 text) so the model treats a bare «sí» as an answer to its own previous message.
 
 Degradation ladder (`ai/workers-ai-decider.ts`): one model call bounded by a
-**hard 20 s timeout** → a brace-matching `extractJson` recovers JSON from
+**hard 90 s timeout** → a brace-matching `extractJson` recovers JSON from
 prose/fences → anything unusable, thrown or timed out → deterministic Catalan
 fallback with **no actions**. The webhook never crashes; a degraded turn never
 mutates state.

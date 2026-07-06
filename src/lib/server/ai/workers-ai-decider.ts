@@ -44,11 +44,11 @@ const TEMPERATURE = 0.3;
 const REPETITION_PENALTY = 1.05;
 const FREQUENCY_PENALTY = 0.1;
 
-// Hard cap on model think-time. Production saw a 195 s hang (gemma-4) and
-// 30–90 s constrained-decoding stalls; WhatsApp's typing indicator lasts ~25 s,
-// so past ~20 s the person is staring at silence — better to trip the
-// deterministic fallback than keep them waiting.
-const TIMEOUT_MS = 20_000;
+// Hard cap on model think-time — production saw a 195 s hang (gemma-4); better
+// to trip the deterministic fallback than keep the person waiting forever.
+// Generous on purpose (owner's call): a slow real answer beats a fast apology,
+// even though WhatsApp's typing indicator only lasts ~25 s.
+const TIMEOUT_MS = 90_000;
 
 interface ChatResult {
 	response?: unknown;
