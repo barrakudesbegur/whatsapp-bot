@@ -78,15 +78,16 @@ a {
 	z-index: 4;
 	flex-wrap: wrap;
 }
-.tabs button {
+.tabs a {
 	border: none;
 	background: transparent;
 	padding: 0.5rem 0.8rem;
 	border-radius: 999px;
 	color: var(--muted);
 	font-weight: 600;
+	text-decoration: none;
 }
-.tabs button[aria-current='true'] {
+.tabs a[aria-current='true'] {
 	background: var(--brand);
 	color: #fff;
 }

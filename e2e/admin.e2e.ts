@@ -23,7 +23,7 @@ test.describe('/admin inbox (SvelteKit remote functions)', () => {
 
 		// A unique fake person per run (name + number) so assertions never collide
 		// with conversations left by earlier runs in the shared local D1.
-		await page.getByRole('button', { name: 'Simulador' }).click();
+		await page.getByRole('link', { name: 'Simulador' }).click();
 		const stamp = Date.now().toString().slice(-8);
 		const wa = '3460' + stamp;
 		const name = 'Berta' + stamp;
@@ -50,7 +50,7 @@ test.describe('/admin inbox (SvelteKit remote functions)', () => {
 		await expect(page.getByText(`Doncs ja està, ${name}!`)).toBeVisible();
 
 		// The completed conversation appears under Converses with the badge.
-		await page.getByRole('button', { name: 'Converses' }).click();
+		await page.getByRole('link', { name: 'Converses' }).click();
 		const item = page.getByRole('button', { name: new RegExp(`${name}.*completed`) });
 		await expect(item).toBeVisible();
 
@@ -63,7 +63,7 @@ test.describe('/admin inbox (SvelteKit remote functions)', () => {
 
 	test('Coneixement loads the course status and KB', async ({ page }) => {
 		await gotoHydrated(page, '/admin');
-		await page.getByRole('button', { name: 'Coneixement' }).click();
+		await page.getByRole('link', { name: 'Coneixement' }).click();
 		await expect(page.getByRole('heading', { name: 'Estat del curs' })).toBeVisible();
 		await expect(page.getByRole('combobox')).toBeVisible();
 		await expect(page.getByRole('heading', { name: /Entrades \(/ })).toBeVisible();
