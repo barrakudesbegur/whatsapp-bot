@@ -6,7 +6,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resolveWaMeUrl, clearWaMeCache } from '../src/lib/server/wa/wame.ts';
+import { resolveWaMeUrl, clearWaMeCache, forwardWaMeParams } from '../src/lib/server/wa/wame.ts';
 import { testEnv } from './util.ts';
 
 beforeEach(() => clearWaMeCache());
@@ -44,6 +44,29 @@ describe('resolveWaMeUrl', () => {
 		const fetcher = vi.fn() as unknown as typeof fetch;
 		expect(await resolveWaMeUrl(testEnv(), fetcher)).toBeNull();
 		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('accepts wa.me query params on the index and forwards them (via forwardWaMeParams)', () => {
+		const prefill = "Explica'm això del curs de sardanes 💃";
+		const url = forwardWaMeParams(
+			'https://wa.me/34612345678',
+			new URLSearchParams({ text: prefill })
+		);
+		// Round-trips: whatever the caller would have put on wa.me lands intact.
+		expect(new URL(url).origin + new URL(url).pathname).toBe('https://wa.me/34612345678');
+		expect(new URL(url).searchParams.get('text')).toBe(prefill);
+	});
+
+	it('forwardWaMeParams: caller params win over a WA_ME_URL override query; none = unchanged', () => {
+		const overridden = forwardWaMeParams(
+			'https://wa.me/34123456789?text=old',
+			new URLSearchParams({ text: 'new' })
+		);
+		expect(new URL(overridden).searchParams.get('text')).toBe('new');
+
+		expect(forwardWaMeParams('https://wa.me/34123456789', new URLSearchParams())).toBe(
+			'https://wa.me/34123456789'
+		);
 	});
 
 	it('fails soft on Graph errors and bad payloads', async () => {

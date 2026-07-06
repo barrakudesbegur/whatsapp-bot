@@ -39,6 +39,21 @@ export function clearWaMeCache(): void {
 	cached = null;
 }
 
+/**
+ * Copy click-to-chat query params from an incoming request onto a resolved
+ * wa.me link. wa.me accepts `?text=` (the URL-encoded prefilled message; the
+ * number lives in the path) — so the index accepts the same params and
+ * forwards them, making this host a drop-in stand-in for wa.me that callers
+ * can link without knowing the number. Unknown params are forwarded too
+ * (wa.me ignores them); a param already on the target (e.g. a `WA_ME_URL`
+ * override carrying its own `text`) is overridden by the caller's.
+ */
+export function forwardWaMeParams(target: string, incoming: URLSearchParams): string {
+	const url = new URL(target);
+	for (const [key, value] of incoming) url.searchParams.set(key, value);
+	return url.href;
+}
+
 async function lookupFromMeta(env: Env, fetcher: typeof fetch): Promise<string | null> {
 	const phoneId = env.WA_PHONE_NUMBER_ID?.trim();
 	const token = env.WA_ACCESS_TOKEN?.trim();

@@ -141,12 +141,14 @@ own tappable options.
   `WA_ME_URL` (manual override for the index redirect — normally empty),
   `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `CF_ACCESS_EMAIL_DOMAIN`.
 
-**Index redirect.** `/` has no page: it 302-forwards to the bot's WhatsApp chat.
-The wa.me number is resolved from **Meta at runtime** (Graph API lookup of
-`WA_PHONE_NUMBER_ID`, cached per isolate — single source of truth, no repo
-stores the number; `$lib/server/wa/wame.ts`). Until the Meta credentials exist
-it forwards to barrakudesbegur.org. The sardanes landing can point its links at
-this host and drop its own `WA_NUMBER` var.
+**Index redirect.** `/` has no page: it 302-forwards to the bot's WhatsApp chat,
+accepting the same query params as wa.me (`?text=` = the prefilled message) and
+forwarding them onto the target — a drop-in wa.me stand-in. The wa.me number is
+resolved from **Meta at runtime** (Graph API lookup of `WA_PHONE_NUMBER_ID`,
+cached per isolate — single source of truth, no repo stores the number;
+`$lib/server/wa/wame.ts`). Until the Meta credentials exist it forwards to
+barrakudesbegur.org (params dropped). The sardanes landing points its links at
+this host (`wa.barrakudesbegur.org/?text=…`) instead of storing a number.
 
 - Secrets: `WA_VERIFY_TOKEN`, `WA_APP_SECRET`, `WA_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID`.
 - Local-dev-only (`.dev.vars`, never in prod): `DEV_SIMULATOR` (enables the Simulador
