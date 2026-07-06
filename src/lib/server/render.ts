@@ -43,6 +43,7 @@ interface InboundBody {
 interface OutboundBody {
 	type?: string;
 	text?: { body?: string };
+	image?: { link?: string; caption?: string };
 	interactive?: {
 		type?: string;
 		header?: { text?: string };
@@ -73,6 +74,10 @@ function renderInbound(body: InboundBody): Partial<RenderedMessage> {
 function renderOutbound(body: OutboundBody): Partial<RenderedMessage> {
 	if (body.type === 'text') {
 		return { kind: 'text', text: body.text?.body ?? '' };
+	}
+	if (body.type === 'image') {
+		const caption = body.image?.caption;
+		return { kind: 'media', text: caption ? `[image] ${caption}` : '[image]' };
 	}
 	const i = body.interactive;
 	const base = {

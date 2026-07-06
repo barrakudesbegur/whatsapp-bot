@@ -98,6 +98,7 @@ export function messageText(row: MessageRow): string | null {
 	try {
 		const body = JSON.parse(row.body_json) as {
 			text?: { body?: unknown };
+			image?: { caption?: unknown };
 			interactive?: {
 				body?: { text?: unknown };
 				button_reply?: { title?: unknown };
@@ -105,6 +106,8 @@ export function messageText(row: MessageRow): string | null {
 			};
 		};
 		if (typeof body.text?.body === 'string') return body.text.body;
+		// Outbound poster: represent it in the transcript by its caption.
+		if (typeof body.image?.caption === 'string') return body.image.caption;
 		const i = body.interactive;
 		for (const candidate of [i?.button_reply?.title, i?.list_reply?.title, i?.body?.text]) {
 			if (typeof candidate === 'string') return candidate;

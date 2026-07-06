@@ -25,6 +25,13 @@ export interface ListRow {
 export type OutMessage =
 	| { kind: 'text'; body: string }
 	| {
+			kind: 'image';
+			/** Public https URL Meta downloads the image from (jpg/png). */
+			link: string;
+			/** Optional caption shown under the image (≤1024 chars). */
+			caption?: string;
+	  }
+	| {
 			kind: 'buttons';
 			header?: string;
 			body: string;
@@ -48,6 +55,7 @@ export type OutMessage =
 // model-generated control that doesn't fit.
 export const LIMITS = {
 	BODY_MAX: 1024,
+	CAPTION_MAX: 1024,
 	HEADER_MAX: 60,
 	FOOTER_MAX: 60,
 	MAX_BUTTONS: 3,
@@ -72,6 +80,16 @@ export function validateOutMessage(msg: OutMessage): string[] {
 	if (msg.kind === 'text') {
 		check(msg.body.length > 0, 'text body is empty');
 		check(msg.body.length <= LIMITS.BODY_MAX, `text body ${msg.body.length} > ${LIMITS.BODY_MAX}`);
+		return errors;
+	}
+
+	if (msg.kind === 'image') {
+		check(msg.link.startsWith('https://'), `image link "${msg.link}" is not an https URL`);
+		if (msg.caption !== undefined)
+			check(
+				msg.caption.length <= LIMITS.CAPTION_MAX,
+				`caption ${msg.caption.length} > ${LIMITS.CAPTION_MAX}`
+			);
 		return errors;
 	}
 

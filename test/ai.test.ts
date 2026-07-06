@@ -236,7 +236,9 @@ describe('fetchEventsSection', () => {
 					description: 'una idea',
 					startDate: '2999-10-04T11:00:00Z',
 					endDate: null,
-					url: 'https://barrakudesbegur.org/esdeveniments/2026-curs-sardanes/'
+					url: 'https://barrakudesbegur.org/esdeveniments/2026-curs-sardanes/',
+					image: 'https://barrakudesbegur.org/events/2026-curs-sardanes.jpg',
+					instagram: 'https://www.instagram.com/p/ABC123/'
 				},
 				{
 					title: 'Festa Major',
@@ -253,7 +255,11 @@ describe('fetchEventsSection', () => {
 			async () => new Response(JSON.stringify(payload))
 		);
 		expect(section).toContain('[PROPER] 2999-10-04 — Curs de sardanes');
+		expect(section).toContain('cartell: https://barrakudesbegur.org/events/2026-curs-sardanes.jpg');
+		expect(section).toContain('instagram: https://www.instagram.com/p/ABC123/');
+		// Events without a poster/instagram get no extras appended.
 		expect(section).toContain('[passat] 1999-08-01 — Festa Major');
+		expect(section).toMatch(/Festa Major: festassa \(https:[^\s]+\)$/m);
 
 		const broken = await fetchEventsSection(env, async () => {
 			throw new Error('network down');

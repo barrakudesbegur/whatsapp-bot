@@ -88,9 +88,10 @@ export interface OutboundPayload {
 	messaging_product: 'whatsapp';
 	recipient_type: 'individual';
 	to: string;
-	type: 'text' | 'interactive';
+	type: 'text' | 'interactive' | 'image';
 	text?: { body: string; preview_url?: boolean };
 	interactive?: OutboundInteractive;
+	image?: { link: string; caption?: string };
 }
 
 /**
@@ -152,6 +153,14 @@ export function toOutboundPayload(to: string, msg: OutMessage): OutboundPayload 
 			...base,
 			type: 'text',
 			text: { body: msg.body, preview_url: false }
+		};
+	}
+
+	if (msg.kind === 'image') {
+		return {
+			...base,
+			type: 'image',
+			image: { link: msg.link, ...(msg.caption ? { caption: msg.caption } : {}) }
 		};
 	}
 

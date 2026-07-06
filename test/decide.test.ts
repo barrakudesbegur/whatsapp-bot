@@ -97,6 +97,26 @@ describe('parseDecision', () => {
 		expect(strings?.replies).toEqual([{ text: 'a' }, { text: 'b' }]);
 	});
 
+	it('keeps a bubble image when it is a plausible https URL, drops it otherwise', () => {
+		const ok = parseDecision(
+			'{"replies":[{"text":"el cartell","image":"https://x.org/a.jpg"}],"actions":[]}'
+		);
+		expect(ok?.replies[0]).toEqual({ text: 'el cartell', image: 'https://x.org/a.jpg' });
+
+		const http = parseDecision(
+			'{"replies":[{"text":"q","image":"http://x.org/a.jpg"}],"actions":[]}'
+		);
+		expect(http?.replies[0]).toEqual({ text: 'q' });
+
+		const junk = parseDecision('{"replies":[{"text":"q","image":42}],"actions":[]}');
+		expect(junk?.replies[0]).toEqual({ text: 'q' });
+	});
+
+	it('accepts a caption-less image bubble (image only, no text)', () => {
+		const d = parseDecision('{"replies":[{"image":"https://x.org/a.jpg"}],"actions":[]}');
+		expect(d?.replies[0]).toEqual({ text: '', image: 'https://x.org/a.jpg' });
+	});
+
 	it('ignores kind:none and drops an option-less control (bubble degrades to text)', () => {
 		const none = parseDecision('{"replies":[{"text":"q","control":{"kind":"none"}}],"actions":[]}');
 		expect(none?.replies[0]).toEqual({ text: 'q' });

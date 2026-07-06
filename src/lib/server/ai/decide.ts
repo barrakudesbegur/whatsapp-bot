@@ -72,6 +72,12 @@ export interface Bubble {
 	text: string;
 	/** Tappable options for this bubble (absent = plain text). */
 	control?: Control;
+	/**
+	 * Poster/image to send with this bubble (the `text` becomes the caption).
+	 * Must be an https URL copied verbatim from the KB — applyDecision drops any
+	 * URL that doesn't appear in the KB, so the model can't invent images.
+	 */
+	image?: string;
 }
 
 export interface Decision {
@@ -177,9 +183,15 @@ export function parseDecision(raw: string): Decision | null {
 			if (r && typeof r === 'object') {
 				const b = r as Record<string, unknown>;
 				const text = typeof b.text === 'string' ? b.text.trim().slice(0, REPLY_MAX) : '';
-				if (!text) return null;
+				const image = parseImage(b.image);
+				// An image bubble may have no text (caption-less poster); a plain
+				// bubble without text is unusable.
+				if (!text && !image) return null;
 				const control = parseControl(b.control);
-				return control ? { text, control } : { text };
+				const bubble: Bubble = { text };
+				if (control) bubble.control = control;
+				if (image) bubble.image = image;
+				return bubble;
 			}
 			return null;
 		})
@@ -200,6 +212,14 @@ export function parseDecision(raw: string): Decision | null {
 	}
 
 	return { replies, actions };
+}
+
+/** Accept only a plausible https image URL; anything else is dropped. */
+function parseImage(raw: unknown): string | undefined {
+	if (typeof raw !== 'string') return undefined;
+	const url = raw.trim();
+	if (!url.startsWith('https://') || url.length > 512 || /\s/.test(url)) return undefined;
+	return url;
 }
 
 function parseControl(raw: unknown): Control | undefined {

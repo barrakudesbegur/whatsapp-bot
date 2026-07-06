@@ -82,7 +82,7 @@ export async function applyDecision(
 		);
 	}
 
-	return sender.send(person, buildReplyMessages(decision), {
+	return sender.send(person, buildReplyMessages(decision, state.kb), {
 		flowInstanceId: surveyInstanceId,
 		aiMeta: meta
 	});
@@ -132,15 +132,29 @@ async function persistSurvey(
 
 /**
  * Turn a decision into WhatsApp messages: one message per bubble, in order.
- * A bubble with a valid `control` becomes an interactive (buttons/list); an
- * invalid control degrades that bubble to plain text.
+ * A bubble with a valid `image` becomes an image message (text → caption) —
+ * but ONLY when the URL appears verbatim in the KB, so a hallucinated URL can
+ * never be sent (it degrades to plain text, or is dropped if there is no
+ * text). A bubble with a valid `control` becomes an interactive (buttons/
+ * list); an invalid control degrades that bubble to plain text.
  */
-export function buildReplyMessages(decision: Decision): OutMessage[] {
-	return decision.replies.map((bubble): OutMessage => {
-		const body = clamp(bubble.text, LIMITS.BODY_MAX);
-		if (!bubble.control) return { kind: 'text', body };
-		return buildControlMessage(body, bubble.control) ?? { kind: 'text', body };
-	});
+export function buildReplyMessages(decision: Decision, kb: string): OutMessage[] {
+	return decision.replies
+		.map((bubble): OutMessage | null => {
+			const body = clamp(bubble.text, LIMITS.BODY_MAX);
+			if (bubble.image && kb.includes(bubble.image)) {
+				const msg: OutMessage = {
+					kind: 'image',
+					link: bubble.image,
+					...(body ? { caption: body } : {})
+				};
+				if (validateOutMessage(msg).length === 0) return msg;
+			}
+			if (!body) return null;
+			if (!bubble.control) return { kind: 'text', body };
+			return buildControlMessage(body, bubble.control) ?? { kind: 'text', body };
+		})
+		.filter((m): m is OutMessage => m !== null);
 }
 
 function buildControlMessage(body: string, control: Control): OutMessage | null {

@@ -35,7 +35,9 @@ export interface SendOptions {
 }
 
 function msgType(msg: OutMessage): string {
-	return msg.kind === 'text' ? 'text' : 'interactive';
+	if (msg.kind === 'text') return 'text';
+	if (msg.kind === 'image') return 'image';
+	return 'interactive';
 }
 
 export class Sender {

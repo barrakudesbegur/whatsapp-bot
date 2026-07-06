@@ -8,6 +8,8 @@
 	interface ChatItem {
 		from: 'person' | 'kudi';
 		text: string;
+		/** Poster URL when Kudi sends an image message (text = caption). */
+		image?: string;
 		buttons?: Opt[];
 		rows?: Opt[];
 		contextId?: string;
@@ -32,6 +34,11 @@
 		return {};
 	}
 
+	/** Bubble text of an outbound message (an image's text is its caption). */
+	function textOf(m: SimMessage): string {
+		return m.kind === 'image' ? (m.caption ?? '') : m.body;
+	}
+
 	async function drive(arg: SimArg, localEcho: string) {
 		if (busy) return;
 		busy = true;
@@ -48,7 +55,8 @@
 			for (const r of messages) {
 				chat.push({
 					from: 'kudi',
-					text: r.message.body,
+					text: textOf(r.message),
+					...(r.message.kind === 'image' ? { image: r.message.link } : {}),
 					...optsOf(r.message),
 					contextId: r.wa_message_id
 				});
@@ -119,6 +127,12 @@
 <div class="transcript">
 	{#each chat as item, i (i)}
 		<div class="bubble {item.from === 'person' ? 'out' : 'in'}">
+			{#if item.image}
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external poster URL -->
+				<a href={item.image} target="_blank" rel="noreferrer">
+					<img class="poster" src={item.image} alt="Cartell" />
+				</a>
+			{/if}
 			{item.text}{#if item.from === 'person'}<span class="ticks" class:seen={item.seen}>✓✓</span
 				>{/if}
 			{#if item.buttons?.length}

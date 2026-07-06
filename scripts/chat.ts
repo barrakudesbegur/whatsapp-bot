@@ -154,6 +154,7 @@ function printReplies(ms: number): void {
 		lastSeenId = row.id;
 		const body = JSON.parse(row.body_json) as {
 			text?: { body?: string };
+			image?: { link?: string; caption?: string };
 			interactive?: {
 				body?: { text?: string };
 				action?: {
@@ -167,8 +168,9 @@ function printReplies(ms: number): void {
 			const m = JSON.parse(row.ai_meta_json) as { model?: string; latencyMs?: number };
 			meta = ` · ${m.model?.split('/').pop()} ${m.latencyMs}ms`;
 		}
-		const text = body.text?.body ?? body.interactive?.body?.text ?? '';
+		const text = body.text?.body ?? body.interactive?.body?.text ?? body.image?.caption ?? '';
 		console.log(`\n${orange(bold('Kudi:'))} ${text}${dim(meta)}`);
+		if (body.image?.link) console.log(dim(`   [🖼 cartell] ${body.image.link}`));
 
 		lastOptions = [];
 		const buttons = body.interactive?.action?.buttons;

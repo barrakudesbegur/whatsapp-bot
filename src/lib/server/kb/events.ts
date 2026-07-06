@@ -14,6 +14,10 @@ export interface LandingEvent {
 	startDate: string;
 	endDate: string | null;
 	url: string;
+	/** Absolute URL of the event poster image (null when the event has none). */
+	image?: string | null;
+	/** Instagram post URL for the event (null when there is none). */
+	instagram?: string | null;
 }
 
 export async function fetchEventsSection(
@@ -37,7 +41,10 @@ export async function fetchEventsSection(
 			.map((e) => {
 				const date = (e.startDate ?? '').slice(0, 10);
 				const tag = date >= today ? 'PROPER' : 'passat';
-				return `- [${tag}] ${date} — ${e.title}: ${e.description} (${e.url})`;
+				const extras =
+					(e.image ? ` · cartell: ${e.image}` : '') +
+					(e.instagram ? ` · instagram: ${e.instagram}` : '');
+				return `- [${tag}] ${date} — ${e.title}: ${e.description} (${e.url})${extras}`;
 			})
 			.join('\n');
 	} catch (err) {

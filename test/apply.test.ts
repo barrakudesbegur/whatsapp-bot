@@ -195,4 +195,40 @@ describe('applyDecision — reply rendering', () => {
 		});
 		expect(sent[0]!.message.kind).toBe('text');
 	});
+
+	it('a bubble with an image URL from the KB sends an image with the text as caption', async () => {
+		const { person, deps } = await setup();
+		const link = 'https://barrakudesbegur.org/events/2026-sant-pere.jpg';
+		const sent = await run(
+			deps,
+			person,
+			{ replies: [{ text: 'El cartell de Sant Pere! 🧡', image: link }], actions: [] },
+			{ kb: `## AGENDA\n- [PROPER] 2026-06-27 — Sant Pere (url) · cartell: ${link}` }
+		);
+		expect(sent[0]!.message).toEqual({
+			kind: 'image',
+			link,
+			caption: 'El cartell de Sant Pere! 🧡'
+		});
+		expect(validateOutMessage(sent[0]!.message)).toEqual([]);
+	});
+
+	it('an image URL NOT in the KB degrades to plain text (anti-hallucination)', async () => {
+		const { person, deps } = await setup();
+		const sent = await run(deps, person, {
+			replies: [{ text: 'mira el cartell', image: 'https://evil.example/fake.jpg' }],
+			actions: []
+		});
+		expect(sent[0]!.message).toEqual({ kind: 'text', body: 'mira el cartell' });
+	});
+
+	it('a caption-less bubble with a non-KB image is dropped, the rest still sends', async () => {
+		const { person, deps } = await setup();
+		const sent = await run(deps, person, {
+			replies: [{ text: '', image: 'https://evil.example/fake.jpg' }, { text: 'segona' }],
+			actions: []
+		});
+		expect(sent).toHaveLength(1);
+		expect(sent[0]!.message).toEqual({ kind: 'text', body: 'segona' });
+	});
 });

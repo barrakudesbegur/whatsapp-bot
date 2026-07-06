@@ -52,6 +52,21 @@ describe('validateOutMessage', () => {
 	it('flags empty text', () => {
 		expect(validateOutMessage({ kind: 'text', body: '' })).not.toEqual([]);
 	});
+
+	it('passes a valid image and flags non-https links / long captions', () => {
+		expect(
+			validateOutMessage({ kind: 'image', link: 'https://x.org/a.jpg', caption: 'hola' })
+		).toEqual([]);
+		expect(validateOutMessage({ kind: 'image', link: 'https://x.org/a.jpg' })).toEqual([]);
+		expect(validateOutMessage({ kind: 'image', link: 'http://x.org/a.jpg' })).not.toEqual([]);
+		expect(
+			validateOutMessage({
+				kind: 'image',
+				link: 'https://x.org/a.jpg',
+				caption: 'x'.repeat(LIMITS.CAPTION_MAX + 1)
+			})
+		).not.toEqual([]);
+	});
 });
 
 describe('toOutboundPayload', () => {
@@ -79,6 +94,21 @@ describe('toOutboundPayload', () => {
 				buttons: [{ type: 'reply', reply: { id: 'grup', title: 'Grup' } }]
 			}
 		});
+	});
+
+	it('builds an image payload (caption omitted when absent)', () => {
+		expect(
+			toOutboundPayload('34600', {
+				kind: 'image',
+				link: 'https://x.org/a.jpg',
+				caption: 'el cartell'
+			})
+		).toMatchObject({
+			type: 'image',
+			image: { link: 'https://x.org/a.jpg', caption: 'el cartell' }
+		});
+		const bare = toOutboundPayload('34600', { kind: 'image', link: 'https://x.org/a.jpg' });
+		expect(bare.image).toEqual({ link: 'https://x.org/a.jpg' });
 	});
 
 	it('builds an interactive list payload with one section', () => {

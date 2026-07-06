@@ -140,6 +140,12 @@ function systemPrompt(state: DecisionState): string {
 			'Tingues present que la gent pot tocar una opció en qualsevol moment (fins i tot d’un missatge antic): tu sempre reps el text de l’opció com un missatge més.'
 	);
 
+	// --- Posters (image bubbles) ---
+	parts.push(
+		'\n## CARTELLS (camp "image" dins una bombolla)\n' +
+			'Alguns esdeveniments de l’AGENDA duen «cartell: <URL>». SEMPRE que responguis sobre un esdeveniment que en té (què és, quan és, què feu…), envia’n el cartell: afegeix a la bombolla "image" amb EXACTAMENT aquella URL copiada del CONEIXEMENT — mai una URL inventada ni retocada. El "text" de la bombolla fa de peu de foto: posa-hi la info clau (data, lloc) i, si l’esdeveniment duu «instagram: <URL>», inclou-hi SEMPRE aquest enllaç al text. Una bombolla amb "image" no pot dur "control". Si l’esdeveniment no té cartell, respon només amb text.'
+	);
+
 	// --- Few-shot examples (action fidelity: say it AND do it) ---
 	parts.push(
 		'\n## EXEMPLES (fixa’t que les dades es DESEN amb accions, no només es diuen)\n' +
@@ -149,6 +155,8 @@ function systemPrompt(state: DecisionState): string {
 			'{"replies":[{"text":"Cap problema! De moment et dic Anònim 😊"},{"text":"Va: quan sapiguem si es fa el curs, què vols que faci?","control":{"kind":"buttons","options":[{"title":"Afegeix-me al grup"},{"title":"Només avisa’m"},{"title":"Res, gràcies"}]}}],"actions":[{"type":"set_display_name","name":"Anònim"}]}\n' +
 			'Persona: «quant costa el curs?» →\n' +
 			'{"replies":[{"text":"Encara no ho sabem — primer volem veure si hi ha prou gent interessada 😊"}],"actions":[]}\n' +
+			'Persona: «què feu per la festa major?» (l’AGENDA té l’esdeveniment amb «cartell:» i «instagram:») →\n' +
+			'{"replies":[{"text":"El 27 de juny, Nit Jove al parc! 🧡 Tota la info aquí: https://www.instagram.com/p/XXXX/","image":"https://barrakudesbegur.org/events/exemple.jpg"}],"actions":[]}\n' +
 			'(El teu últim missatge era «Vols que t’expliqui què és?») Persona: «sí» → RESPONS el que oferies, sense repetir la pregunta:\n' +
 			'{"replies":[{"text":"És una idea que estem explorant: un curs per aprendre a ballar sardanes a Begur, en cap de setmana. Encara no està confirmat — primer mirem si hi ha prou gent 😊"},{"text":"T’hi vols apuntar? Digue’m com et dius i t’ho apunto!"}],"actions":[{"type":"start_survey"}]}'
 	);
@@ -167,8 +175,8 @@ function systemPrompt(state: DecisionState): string {
 	// user/assistant turns; see buildDecideMessages.)
 	parts.push(
 		'\n## FORMAT DE RESPOSTA\n' +
-			'Respon NOMÉS amb un JSON: {"replies":[{"text":"<bombolla curta>","control":{...opcional...}}, ...],"actions":[...]}. ' +
-			'"replies" són d’1 a 10 bombolles de WhatsApp CURTES enviades en ordre (normalment 1–3); cada bombolla pot dur el seu "control" opcional. "actions" pot ser [].'
+			'Respon NOMÉS amb un JSON: {"replies":[{"text":"<bombolla curta>","control":{...opcional...},"image":"<URL opcional>"}, ...],"actions":[...]}. ' +
+			'"replies" són d’1 a 10 bombolles de WhatsApp CURTES enviades en ordre (normalment 1–3); cada bombolla pot dur el seu "control" opcional, o bé una "image" (URL exacta d’un cartell del CONEIXEMENT). "actions" pot ser [].'
 	);
 
 	return parts.join('\n');
