@@ -27,10 +27,7 @@
 			Coneixement
 		</a>
 		{#if data.simulatorEnabled}
-			<a
-				href={resolve('/admin/simulador')}
-				aria-current={page.url.pathname === '/admin/simulador'}
-			>
+			<a href={resolve('/admin/simulador')} aria-current={page.url.pathname === '/admin/simulador'}>
 				Simulador
 			</a>
 		{/if}

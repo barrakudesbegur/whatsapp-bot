@@ -21,14 +21,12 @@ test.describe('/admin inbox (SvelteKit remote functions)', () => {
 		await gotoHydrated(page, '/admin');
 		await expect(page.getByRole('heading', { name: "Panell d'en Kudi" })).toBeVisible();
 
-		// A unique fake person per run (name + number) so assertions never collide
-		// with conversations left by earlier runs in the shared local D1.
+		// The Simulador starts as a brand-new random person on every load, so runs
+		// don't collide via the shared local D1. A unique display name (typed in
+		// the chat itself) keeps the Converses lookup exact.
 		await page.getByRole('link', { name: 'Simulador' }).click();
-		const stamp = Date.now().toString().slice(-8);
-		const wa = '3460' + stamp;
-		const name = 'Berta' + stamp;
-		await page.getByRole('textbox', { name: 'Telèfon fals' }).fill(wa);
-		await page.getByRole('textbox', { name: 'Nom del perfil' }).fill(name);
+		await expect(page.getByText('Persona nova (346')).toBeVisible();
+		const name = 'Berta' + Date.now().toString().slice(-8);
 
 		// Trigger → K1 (name question)
 		await send(page, "Explica'm això del curs de sardanes");

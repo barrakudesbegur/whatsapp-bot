@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { MemoryStore } from '../src/lib/server/db/memory.ts';
 import { Sender } from '../src/lib/server/wa/sender.ts';
-import { applyDecision } from '../src/lib/server/survey/apply.ts';
+import { applyDecision, stripEmDash } from '../src/lib/server/survey/apply.ts';
 import { validateOutMessage, type OutMessage } from '../src/lib/server/messages.ts';
 import { makeState, testEnv } from './util.ts';
 import type { Decision } from '../src/lib/server/ai/decide.ts';
@@ -32,13 +32,58 @@ async function surveyRow(store: MemoryStore, personId: number) {
 }
 
 describe('applyDecision — writes', () => {
-	it('set_display_name saves the name, clamped to 40 chars', async () => {
+	it('set_display_name saves the name the person said, clamped to 40 chars', async () => {
 		const { store, person, deps } = await setup();
+		const name = 'x'.repeat(60);
+		await run(
+			deps,
+			person,
+			{
+				replies: [{ text: 'ok' }],
+				actions: [{ type: 'set_display_name', name }]
+			},
+			{ userMessage: `em dic ${name}` }
+		);
+		expect((await store.getPerson(person.id))?.display_name).toHaveLength(40);
+	});
+
+	it('drops a hallucinated name the person never said (observed live: «Marc»)', async () => {
+		const { store, person, deps } = await setup();
+		await run(
+			deps,
+			person,
+			{
+				replies: [{ text: 'Perfecte, Marc!' }],
+				actions: [{ type: 'set_display_name', name: 'Marc' }]
+			},
+			{ userMessage: 'els caps de setmana', transcript: [{ role: 'user', text: 'hola' }] }
+		);
+		expect((await store.getPerson(person.id))?.display_name).toBeNull();
+	});
+
+	it('accepts a name from an earlier user turn, the profile name, or Anònim', async () => {
+		const { store, person, deps } = await setup();
+		await run(
+			deps,
+			person,
+			{ replies: [{ text: 'ok' }], actions: [{ type: 'set_display_name', name: 'Joan' }] },
+			{ userMessage: 'sí', transcript: [{ role: 'user', text: 'em dic joan' }] }
+		);
+		expect((await store.getPerson(person.id))?.display_name).toBe('Joan');
+
+		await run(
+			deps,
+			person,
+			{ replies: [{ text: 'ok' }], actions: [{ type: 'set_display_name', name: 'Prof' }] },
+			{ person: { displayName: 'Joan', profileName: 'Prof', isAnonymous: false } }
+		);
+		expect((await store.getPerson(person.id))?.display_name).toBe('Prof');
+
 		await run(deps, person, {
 			replies: [{ text: 'ok' }],
-			actions: [{ type: 'set_display_name', name: 'x'.repeat(60) }]
+			actions: [{ type: 'set_display_name', name: 'Anònim' }]
 		});
-		expect((await store.getPerson(person.id))?.display_name).toHaveLength(40);
+		expect((await store.getPerson(person.id))?.display_name).toBe('Anònim');
 	});
 
 	it('records signup + availability and CODE derives completion', async () => {
@@ -220,6 +265,21 @@ describe('applyDecision — reply rendering', () => {
 			actions: []
 		});
 		expect(sent[0]!.message).toEqual({ kind: 'text', body: 'mira el cartell' });
+	});
+
+	it('em dashes never reach WhatsApp (owner rule: not used in Catalan)', async () => {
+		const { person, deps } = await setup();
+		const sent = await run(deps, person, {
+			replies: [{ text: 'Encara no ho sabem — primer volem veure-ho 😊' }],
+			actions: []
+		});
+		expect((sent[0]!.message as { body: string }).body).toBe(
+			'Encara no ho sabem, primer volem veure-ho 😊'
+		);
+
+		expect(stripEmDash('Fet! — i ja està')).toBe('Fet! i ja està');
+		expect(stripEmDash('un guionet 10-12 es queda')).toBe('un guionet 10-12 es queda');
+		expect(stripEmDash('— hola')).toBe('hola');
 	});
 
 	it('a caption-less bubble with a non-KB image is dropped, the rest still sends', async () => {

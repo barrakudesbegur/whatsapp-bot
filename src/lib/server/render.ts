@@ -12,9 +12,13 @@ export interface RenderedButton {
 }
 export interface RenderedMessage {
 	id: number;
+	/** Graph API message id — the simulator needs it to reply to old interactives. */
+	waMessageId: string;
 	direction: 'in' | 'out';
 	kind: 'text' | 'buttons' | 'list' | 'media' | 'unknown';
 	text: string;
+	/** Poster URL when an outbound image message (text carries the caption). */
+	image?: string;
 	buttons?: RenderedButton[];
 	rows?: RenderedButton[];
 	header?: string;
@@ -76,8 +80,11 @@ function renderOutbound(body: OutboundBody): Partial<RenderedMessage> {
 		return { kind: 'text', text: body.text?.body ?? '' };
 	}
 	if (body.type === 'image') {
-		const caption = body.image?.caption;
-		return { kind: 'media', text: caption ? `[image] ${caption}` : '[image]' };
+		return {
+			kind: 'media',
+			text: body.image?.caption ?? '[image]',
+			image: body.image?.link
+		};
 	}
 	const i = body.interactive;
 	const base = {
@@ -131,9 +138,11 @@ export function renderMessage(row: MessageRow): RenderedMessage {
 
 	return {
 		id: row.id,
+		waMessageId: row.wa_message_id ?? '',
 		direction: row.direction,
 		kind: parsed.kind ?? 'unknown',
 		text: parsed.text ?? '',
+		image: parsed.image,
 		buttons: parsed.buttons,
 		rows: parsed.rows,
 		header: parsed.header,

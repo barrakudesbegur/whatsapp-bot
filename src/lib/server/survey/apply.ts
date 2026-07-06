@@ -42,7 +42,11 @@ export async function applyDecision(
 	for (const action of decision.actions) {
 		switch (action.type) {
 			case 'set_display_name':
-				await store.setDisplayName(person.id, clamp(action.name.trim(), 40), now);
+				// Only trust a name the person could actually have said (observed
+				// live: the model invented «Marc» out of nowhere and saved it).
+				if (nameIsGrounded(action.name, state)) {
+					await store.setDisplayName(person.id, clamp(action.name.trim(), 40), now);
+				}
 				break;
 			case 'start_survey':
 				surveyTouched = true;
@@ -89,6 +93,26 @@ export async function applyDecision(
 }
 
 // --- Internals ------------------------------------------------------------
+
+/**
+ * A model-proposed display name is only trusted when the person could actually
+ * have said it: it appears (case-insensitive) in the current message or a
+ * recent user turn, matches the WhatsApp profile name, or is the explicit
+ * «Anònim» fallback the prompt allows. Anything else is a hallucination and is
+ * dropped — the name stays unset and the model keeps asking for it.
+ */
+function nameIsGrounded(name: string, state: DecisionState): boolean {
+	const n = name.trim().toLowerCase();
+	if (!n) return false;
+	if (n === 'anònim' || n === 'anonim') return true;
+	const profile = state.person.profileName?.trim().toLowerCase();
+	if (profile && profile.includes(n)) return true;
+	const userTexts = [
+		state.userMessage,
+		...state.transcript.filter((t) => t.role === 'user').map((t) => t.text)
+	];
+	return userTexts.some((t) => t.toLowerCase().includes(n));
+}
 
 async function persistSurvey(
 	store: Store,
@@ -141,7 +165,7 @@ async function persistSurvey(
 export function buildReplyMessages(decision: Decision, kb: string): OutMessage[] {
 	return decision.replies
 		.map((bubble): OutMessage | null => {
-			const body = clamp(bubble.text, LIMITS.BODY_MAX);
+			const body = clamp(stripEmDash(bubble.text), LIMITS.BODY_MAX);
 			if (bubble.image && kb.includes(bubble.image)) {
 				const msg: OutMessage = {
 					kind: 'image',
@@ -187,4 +211,18 @@ function buildControlMessage(body: string, control: Control): OutMessage | null 
 
 function clamp(s: string, max: number): string {
 	return s.length > max ? s.slice(0, max) : s;
+}
+
+/**
+ * Kudi never writes em dashes (owner rule: not used in Catalan). The prompt
+ * forbids them, but models slip — normalize any that get through to a comma,
+ * and collapse the double punctuation that can leave behind.
+ */
+export function stripEmDash(s: string): string {
+	return s
+		.replace(/\s*—\s*/g, ', ')
+		.replace(/\s+–\s+/g, ', ')
+		.replace(/([,.;:!?])\s*,\s?/g, '$1 ')
+		.replace(/^[,\s]+/, '')
+		.replace(/[,\s]+$/, '');
 }
