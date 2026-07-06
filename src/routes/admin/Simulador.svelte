@@ -100,13 +100,17 @@
 					contextId: r.wa_message_id
 				});
 			}
-			await conversations().refresh();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			clearTimeout(seenTimer);
 			busy = false;
 		}
+		// Refresh the picker (the new persona appears) OUTSIDE the busy window —
+		// awaiting it kept the option buttons disabled while it settled.
+		conversations()
+			.refresh()
+			.catch(() => {});
 	}
 
 	function sendText() {

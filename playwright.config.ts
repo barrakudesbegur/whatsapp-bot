@@ -15,11 +15,14 @@ export default defineConfig({
 	// `vite dev` gives the emulated Cloudflare platform (local D1 + AI bindings)
 	// via the adapter's platformProxy. `.dev.vars` enables DEV_SIMULATOR +
 	// DEV_ACCESS_BYPASS, so /admin is reachable and the Simulador works. Migrations
-	// are applied first.
+	// are applied first. DEV_FAKE_AI swaps the model for the deterministic
+	// FakeDecider: e2e runs spend no Workers AI neurons and never flake on model
+	// output.
 	webServer: {
 		command: `npm run db:apply:local && npx vite dev --port ${PORT} --strictPort`,
 		port: PORT,
 		reuseExistingServer: !process.env.CI,
-		timeout: 120_000
+		timeout: 120_000,
+		env: { DEV_FAKE_AI: 'true' }
 	}
 });

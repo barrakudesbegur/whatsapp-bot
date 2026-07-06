@@ -36,7 +36,13 @@ export async function fetchEventsSection(
 		const events = body.events ?? [];
 		if (events.length === 0) return undefined;
 		const today = new Date().toISOString().slice(0, 10);
-		return events
+		// The feed arrives newest-first. Keep every upcoming event but only the 4
+		// most recent past ones: each line costs real prompt tokens (3 URLs), and
+		// nobody asks about the agenda of two summers ago.
+		const dateOf = (e: LandingEvent) => (e.startDate ?? '').slice(0, 10);
+		const upcoming = events.filter((e) => dateOf(e) >= today);
+		const recentPast = events.filter((e) => dateOf(e) < today).slice(0, 4);
+		return [...upcoming, ...recentPast]
 			.slice(0, 12)
 			.map((e) => {
 				const date = (e.startDate ?? '').slice(0, 10);

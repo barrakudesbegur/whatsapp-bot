@@ -38,4 +38,11 @@ export interface Env {
 	// --- Local-dev only (never set in production) ---
 	/** "true" enables the dev simulator (the Simulador tab + simulate command). */
 	DEV_SIMULATOR?: string;
+	/**
+	 * "true" replaces the model with the deterministic FakeDecider (no Workers AI
+	 * neurons spent). Only honored while WA_ENABLED !== "true". The Playwright
+	 * webServer sets it (via process env in `vite dev`) so e2e never calls the
+	 * real model.
+	 */
+	DEV_FAKE_AI?: string;
 }
