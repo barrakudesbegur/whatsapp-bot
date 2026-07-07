@@ -40,9 +40,9 @@
 		"CF_ACCESS_TEAM_DOMAIN": "https://barrakudesbegur.cloudflareaccess.com",
 		"CF_ACCESS_AUD": "092f90d1ebd4d897726da7b2547dc13c07a0e737c18b8c3ac82e4662529a3a3b",
 		"CF_ACCESS_EMAIL_DOMAIN": "@barrakudesbegur.org",
-		// Keep "false" until Meta setup exists: outbound sends become no-ops logged
-		// to D1, so the whole system is testable end-to-end via the simulator.
-		"WA_ENABLED": "false",
+		// Meta setup now exists (test number + verified webhook), so sends are live:
+		// "true" → real Graph API sends and the real Workers AI decider (not FakeDecider).
+		"WA_ENABLED": "true",
 		// MANUAL OVERRIDE for the index redirect target. Normally leave empty: the
 		// wa.me link is resolved from Meta at runtime (single source of truth —
 		// the Graph API knows the number behind WA_PHONE_NUMBER_ID). Until the
