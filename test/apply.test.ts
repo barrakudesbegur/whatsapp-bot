@@ -86,6 +86,18 @@ describe('applyDecision — writes', () => {
 		expect((await store.getPerson(person.id))?.display_name).toBe('Anònim');
 	});
 
+	it('accepts the accented spelling of a name the person typed without accents', async () => {
+		const { store, person, deps } = await setup();
+		// Person types «merce», the model canonicalizes to «Mercè» (proper Catalan).
+		await run(
+			deps,
+			person,
+			{ replies: [{ text: 'ok' }], actions: [{ type: 'set_display_name', name: 'Mercè' }] },
+			{ userMessage: 'em dic merce' }
+		);
+		expect((await store.getPerson(person.id))?.display_name).toBe('Mercè');
+	});
+
 	it('records signup + availability and CODE derives completion', async () => {
 		const { store, person, deps } = await setup();
 		await run(deps, person, {
@@ -110,6 +122,36 @@ describe('applyDecision — writes', () => {
 		const row = await surveyRow(store, person.id);
 		expect(row?.status).toBe('declined');
 		expect(JSON.parse(row!.data_json)).toMatchObject({ action: 'res' });
+	});
+
+	it('a decision that both declines AND signs up resolves last-write-wins (not latched to declined)', async () => {
+		const { store, person, deps } = await setup();
+		await run(deps, person, {
+			replies: [{ text: 'va, apuntat!' }],
+			actions: [{ type: 'decline_survey' }, { type: 'record_signup', choice: 'grup' }]
+		});
+		const row = await surveyRow(store, person.id);
+		// signup ends 'grup', so the draft is active (awaiting availability), NOT a
+		// closed 'declined' submission stamped completed.
+		expect(row?.status).toBe('active');
+		expect(row?.completed_at).toBeNull();
+		expect(JSON.parse(row!.data_json)).toMatchObject({ action: 'grup' });
+	});
+
+	it('custom availability with no note is NOT recorded (survey keeps asking, stores no junk)', async () => {
+		const { store, person, deps } = await setup();
+		await run(deps, person, {
+			replies: [{ text: 'i quan et va bé?' }],
+			actions: [
+				{ type: 'record_signup', choice: 'grup' },
+				{ type: 'record_availability', bucket: 'custom' }
+			]
+		});
+		const row = await surveyRow(store, person.id);
+		// signup captured, availability left unset → active, never completed with a
+		// meaningless bare 'custom'.
+		expect(row?.status).toBe('active');
+		expect(JSON.parse(row!.data_json)).toEqual({ action: 'grup' });
 	});
 
 	it('custom availability stores the free-text note as availability_raw', async () => {
@@ -265,6 +307,46 @@ describe('applyDecision — reply rendering', () => {
 			actions: []
 		});
 		expect(sent[0]!.message).toEqual({ kind: 'text', body: 'mira el cartell' });
+	});
+
+	it('a truncated PREFIX of a real KB image URL is rejected (exact match, not substring)', async () => {
+		const { person, deps } = await setup();
+		const link = 'https://barrakudesbegur.org/events/2026-sant-pere.jpg';
+		const sent = await run(
+			deps,
+			person,
+			// URL minus its «.jpg» — a substring of the real one, but not a real image.
+			{
+				replies: [{ text: 'mira', image: 'https://barrakudesbegur.org/events/2026-sant-pere' }],
+				actions: []
+			},
+			{ kb: `## AGENDA\n- [PROPER] 2026-06-27 — Sant Pere (url) · cartell: ${link}` }
+		);
+		expect(sent[0]!.message).toEqual({ kind: 'text', body: 'mira' });
+	});
+
+	it('a turn that would send nothing falls back to a non-empty apology instead of silence', async () => {
+		const { person, deps } = await setup();
+		// Single caption-less bubble whose image is not in the KB → drops to [].
+		const sent = await run(deps, person, {
+			replies: [{ text: '', image: 'https://evil.example/fake.jpg' }],
+			actions: []
+		});
+		expect(sent).toHaveLength(1);
+		expect(sent[0]!.message.kind).toBe('text');
+		expect((sent[0]!.message as { body: string }).body).toContain('encallat');
+	});
+
+	it('a control with duplicate button titles degrades to plain text (Meta rejects dupes)', async () => {
+		const { person, deps } = await setup();
+		const sent = await run(deps, person, {
+			replies: [
+				{ text: 'tria', control: { kind: 'buttons', options: [{ title: 'Sí' }, { title: 'Sí' }] } }
+			],
+			actions: []
+		});
+		expect(sent[0]!.message.kind).toBe('text');
+		expect(validateOutMessage(sent[0]!.message)).toEqual([]);
 	});
 
 	it('em dashes never reach WhatsApp (owner rule: not used in Catalan)', async () => {

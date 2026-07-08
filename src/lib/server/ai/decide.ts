@@ -275,30 +275,40 @@ export function extractJson(raw: string): unknown {
 		/* fall through to brace matching */
 	}
 
-	const start = s.indexOf('{');
-	if (start === -1) return null;
-	let depth = 0;
-	let inString = false;
-	let escaped = false;
-	for (let i = start; i < s.length; i++) {
-		const ch = s[i];
-		if (inString) {
-			if (escaped) escaped = false;
-			else if (ch === '\\') escaped = true;
-			else if (ch === '"') inString = false;
-			continue;
-		}
-		if (ch === '"') inString = true;
-		else if (ch === '{' || ch === '[') depth++;
-		else if (ch === '}' || ch === ']') {
-			depth--;
-			if (depth === 0) {
-				try {
-					return JSON.parse(s.slice(start, i + 1));
-				} catch {
-					return null;
+	// Scan each balanced {..} group from successive '{'s. If the first group isn't
+	// valid JSON (the model prepended prose that itself contains braces, e.g.
+	// "Aquí tens: {exemple}\n{\"replies\":...}"), try the next '{' instead of
+	// giving up — otherwise a whole valid turn is discarded into the fallback.
+	let start = s.indexOf('{');
+	while (start !== -1) {
+		let depth = 0;
+		let inString = false;
+		let escaped = false;
+		let end = -1;
+		for (let i = start; i < s.length; i++) {
+			const ch = s[i];
+			if (inString) {
+				if (escaped) escaped = false;
+				else if (ch === '\\') escaped = true;
+				else if (ch === '"') inString = false;
+				continue;
+			}
+			if (ch === '"') inString = true;
+			else if (ch === '{' || ch === '[') depth++;
+			else if (ch === '}' || ch === ']') {
+				depth--;
+				if (depth === 0) {
+					end = i;
+					break;
 				}
 			}
+		}
+		// Never balanced (e.g. truncated mid-JSON at max_tokens) → give up.
+		if (end === -1) return null;
+		try {
+			return JSON.parse(s.slice(start, end + 1));
+		} catch {
+			start = s.indexOf('{', start + 1);
 		}
 	}
 	return null;

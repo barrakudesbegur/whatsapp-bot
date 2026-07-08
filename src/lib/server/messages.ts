@@ -111,6 +111,12 @@ export function validateOutMessage(msg: OutMessage): string[] {
 			`buttons count ${msg.buttons.length} not in 1..${LIMITS.MAX_BUTTONS}`
 		);
 		const ids = new Set<string>();
+		// WhatsApp rejects an interactive whose reply-button titles are not unique
+		// (error 131009) — and buildControlMessage assigns unique ids from possibly
+		// colliding model titles (two options that clamp to the same 20 chars), so
+		// the id check alone can't catch it. Flag it here → the control degrades to
+		// a plain text bubble instead of a silently-failed send.
+		const titles = new Set<string>();
 		for (const b of msg.buttons) {
 			check(
 				b.title.length <= LIMITS.BUTTON_TITLE_MAX,
@@ -118,7 +124,9 @@ export function validateOutMessage(msg: OutMessage): string[] {
 			);
 			check(b.id.length > 0, 'button id is empty');
 			check(!ids.has(b.id), `duplicate button id "${b.id}"`);
+			check(!titles.has(b.title), `duplicate button title "${b.title}"`);
 			ids.add(b.id);
+			titles.add(b.title);
 		}
 	} else {
 		// list

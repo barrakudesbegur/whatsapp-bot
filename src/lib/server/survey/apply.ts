@@ -15,6 +15,7 @@
 import { validateOutMessage, LIMITS, type OutMessage } from '../messages.ts';
 import type { Store, FlowStatusRow } from '../db/store.ts';
 import type { Sender, SentMessage } from '../wa/sender.ts';
+import { fallbackDecision } from '../ai/decide.ts';
 import type { AiMeta, Control, Decision, DecisionState } from '../ai/decide.ts';
 import { SURVEY_ID, toDataJson, deriveStatus, type SurveyCollected } from './spec.ts';
 import { nowIso } from '../time.ts';
@@ -37,7 +38,6 @@ export async function applyDecision(
 
 	let draft: SurveyCollected = { ...state.survey.collected };
 	let surveyTouched = false;
-	let declined = false;
 
 	for (const action of decision.actions) {
 		switch (action.type) {
@@ -59,23 +59,36 @@ export async function applyDecision(
 				draft.signup = action.choice;
 				surveyTouched = true;
 				break;
-			case 'record_availability':
-				draft.availability = action.bucket;
-				draft.availabilityRaw = action.bucket === 'custom' ? (action.note ?? '') : null;
+			case 'record_availability': {
+				if (action.bucket === 'custom') {
+					const note = action.note?.trim();
+					// «custom» with no note is meaningless: it would COMPLETE the survey
+					// with an uninterpretable bucket the model then never re-asks. Skip it
+					// so deriveMissing keeps asking for a real availability.
+					if (!note) break;
+					draft.availability = 'custom';
+					draft.availabilityRaw = note;
+				} else {
+					draft.availability = action.bucket;
+					draft.availabilityRaw = null;
+				}
 				surveyTouched = true;
 				break;
+			}
 			case 'decline_survey':
 				draft.signup = 'res';
-				declined = true;
 				surveyTouched = true;
 				break;
 		}
 	}
 
 	// Persist the survey draft (code derives completion; the model never completes).
+	// Status is derived from the FINAL draft so a decision that both declines and
+	// re-signs up (contradictory model output) is resolved last-write-wins by the
+	// draft, not latched to 'declined' regardless of later actions.
 	let surveyInstanceId = state.survey.instanceId;
 	if (surveyTouched) {
-		const status = declined ? 'declined' : deriveStatus(draft);
+		const status = deriveStatus(draft);
 		surveyInstanceId = await persistSurvey(
 			store,
 			person.id,
@@ -86,7 +99,13 @@ export async function applyDecision(
 		);
 	}
 
-	return sender.send(person, buildReplyMessages(decision, state.kb), {
+	// Never leave the person with silence after the typing indicator: if every
+	// bubble got dropped (e.g. a caption-less image whose URL isn't in the KB, so
+	// buildReplyMessages returns []), substitute the deterministic, non-mutating
+	// apology so every inbound turn yields at least one outbound message.
+	let messages = buildReplyMessages(decision, state.kb);
+	if (messages.length === 0) messages = buildReplyMessages(fallbackDecision(state), state.kb);
+	return sender.send(person, messages, {
 		flowInstanceId: surveyInstanceId,
 		aiMeta: meta
 	});
@@ -95,23 +114,38 @@ export async function applyDecision(
 // --- Internals ------------------------------------------------------------
 
 /**
+ * Diacritic- and case-insensitive fold for grounding. The prompt tells Kudi to
+ * write proper Catalan, so it canonicalizes accents the person omitted («merce»
+ * → «Mercè»); comparing raw would drop that as ungrounded and Kudi would re-ask
+ * forever (a wasted ~3,700-token turn each time). We store the model's accented
+ * spelling but ground it against the folded user text.
+ */
+function fold(s: string): string {
+	return s
+		.normalize('NFD')
+		.replace(/\p{Diacritic}/gu, '')
+		.trim()
+		.toLowerCase();
+}
+
+/**
  * A model-proposed display name is only trusted when the person could actually
- * have said it: it appears (case-insensitive) in the current message or a
+ * have said it: it appears (accent/case-insensitive) in the current message or a
  * recent user turn, matches the WhatsApp profile name, or is the explicit
  * «Anònim» fallback the prompt allows. Anything else is a hallucination and is
  * dropped — the name stays unset and the model keeps asking for it.
  */
 function nameIsGrounded(name: string, state: DecisionState): boolean {
-	const n = name.trim().toLowerCase();
+	const n = fold(name);
 	if (!n) return false;
-	if (n === 'anònim' || n === 'anonim') return true;
-	const profile = state.person.profileName?.trim().toLowerCase();
+	if (n === 'anonim') return true; // «Anònim» and «Anonim» both fold to this
+	const profile = state.person.profileName ? fold(state.person.profileName) : '';
 	if (profile && profile.includes(n)) return true;
 	const userTexts = [
 		state.userMessage,
 		...state.transcript.filter((t) => t.role === 'user').map((t) => t.text)
 	];
-	return userTexts.some((t) => t.toLowerCase().includes(n));
+	return userTexts.some((t) => fold(t).includes(n));
 }
 
 async function persistSurvey(
@@ -163,10 +197,16 @@ async function persistSurvey(
  * list); an invalid control degrades that bubble to plain text.
  */
 export function buildReplyMessages(decision: Decision, kb: string): OutMessage[] {
+	// Exact set of https URLs present in the KB. Gating images on an EXACT match
+	// (not a substring `kb.includes`) closes the hole where a truncated/prefix URL
+	// — e.g. the poster URL minus its «.jpg» — is a substring of a real KB URL and
+	// would be sent as a broken (404) image. parseImage already rejects URLs with
+	// whitespace, so a model image URL is a single clean token that matches here.
+	const kbUrls = new Set(kb.match(/https:\/\/\S+/g) ?? []);
 	return decision.replies
 		.map((bubble): OutMessage | null => {
 			const body = clamp(stripEmDash(bubble.text), LIMITS.BODY_MAX);
-			if (bubble.image && kb.includes(bubble.image)) {
+			if (bubble.image && kbUrls.has(bubble.image)) {
 				const msg: OutMessage = {
 					kind: 'image',
 					link: bubble.image,

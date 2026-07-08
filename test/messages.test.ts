@@ -36,6 +36,18 @@ describe('validateOutMessage', () => {
 		expect(errs.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it('flags duplicate button titles (Meta rejects them, error 131009)', () => {
+		const msg: OutMessage = {
+			kind: 'buttons',
+			body: '?',
+			buttons: [
+				{ id: 'a', title: 'Sí' },
+				{ id: 'b', title: 'Sí' }
+			]
+		};
+		expect(validateOutMessage(msg)).toContain('duplicate button title "Sí"');
+	});
+
 	it('flags >10 rows, long row titles and duplicate ids', () => {
 		const rows = Array.from({ length: 11 }, () => ({
 			id: 'dup',

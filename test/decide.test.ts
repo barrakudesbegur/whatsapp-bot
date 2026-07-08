@@ -21,6 +21,13 @@ describe('extractJson', () => {
 		expect(extractJson(raw)).toEqual({ reply: 'ei', actions: [] });
 	});
 
+	it('skips a leading non-JSON brace group and finds the real JSON after it', () => {
+		// A brace group in the prose ({exemple}) must not abort the scan — the real
+		// object follows it and would otherwise be discarded into the fallback.
+		const raw = 'Aquí tens: {exemple}\n{"replies":[{"text":"Ei!"}],"actions":[]}';
+		expect(extractJson(raw)).toEqual({ replies: [{ text: 'Ei!' }], actions: [] });
+	});
+
 	it('handles a nested actions array (the case a non-greedy regex would truncate)', () => {
 		const raw =
 			'{"reply":"fet","actions":[{"type":"record_signup","choice":"grup"},{"type":"set_display_name","name":"Pol"}],"control":{"kind":"none"}}';
