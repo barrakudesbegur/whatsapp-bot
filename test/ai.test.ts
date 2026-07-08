@@ -214,6 +214,24 @@ describe('loadDecisionState', () => {
 		);
 		expect(state.transcript).toEqual([]);
 	});
+
+	it('degrades a transient D1 read failure instead of silently dropping the turn', async () => {
+		const store = new MemoryStore();
+		await store.upsertPerson('34600', null, 't0');
+		// A degradable read blips: the turn must still produce a usable state
+		// (static KB grounds the answer), not reject and drop the message.
+		store.listKbEntries = async () => {
+			throw new Error('D1 blip');
+		};
+		const state = await loadDecisionState(
+			{ id: 1, display_name: null, profile_name: null },
+			'hola',
+			false,
+			{ store, env: testEnv() }
+		);
+		expect(state.kb).toContain('Barrakudes'); // STATIC_KB still present
+		expect(state.userMessage).toBe('hola');
+	});
 });
 
 describe('messageText', () => {

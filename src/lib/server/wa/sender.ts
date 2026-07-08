@@ -23,6 +23,31 @@ import { toOutboundPayload, toTypingPayload } from './wire.ts';
 
 const GRAPH_BASE = 'https://graph.facebook.com';
 
+// One transient-failure retry for outbound sends. WhatsApp occasionally loses a
+// send to a 429/5xx/network blip, and because the inbound is already deduped
+// nothing re-triggers a dropped reply — the person sees "typing…" then silence.
+// Sends are NOT idempotent (the Cloud API has no idempotency key), so a retry
+// after a lost-but-accepted response can duplicate a bubble: an accepted tradeoff
+// (a rare duplicate beats losing the reply). App-level rate limits (HTTP 400 +
+// code 130429/131056) are deliberately NOT retried here — they need throttling,
+// not an immediate retry (that is the separate per-sender budget guard's job).
+const MAX_SEND_ATTEMPTS = 2;
+const RETRY_BASE_MS = 500;
+
+function isTransient(status: number): boolean {
+	return status === 429 || status >= 500;
+}
+
+function retryDelayMs(res: Response, attempt: number): number {
+	const retryAfter = Number(res.headers.get('retry-after'));
+	if (Number.isFinite(retryAfter) && retryAfter > 0) return Math.min(retryAfter * 1000, 2000);
+	return RETRY_BASE_MS * attempt;
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface SentMessage {
 	waMessageId: string;
 	message: OutMessage;
@@ -98,49 +123,50 @@ export class Sender {
 			return { waMessageId, message, status: 'logged' };
 		}
 
-		try {
-			const res = await this.postToMeta(payload);
-			const body = (await res.json().catch(() => ({}))) as {
-				messages?: { id?: string }[];
-				error?: unknown;
-			};
-			if (!res.ok || !body.messages?.[0]?.id) {
-				const errorJson = JSON.stringify(body.error ?? body ?? { status: res.status });
-				const waMessageId = `failed-${crypto.randomUUID()}`;
-				await this.record(
-					person.id,
-					waMessageId,
-					message,
-					payload,
-					opts,
-					aiMetaJson,
-					'failed',
-					errorJson
-				);
-				console.error('WA send failed', {
-					status: res.status,
-					error: body.error
-				});
-				return { waMessageId, message, status: 'failed' };
+		let lastError = JSON.stringify({ status: 0 });
+		let lastStatus = 0;
+		for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+			try {
+				const res = await this.postToMeta(payload);
+				const body = (await res.json().catch(() => ({}))) as {
+					messages?: { id?: string }[];
+					error?: { code?: number; message?: string };
+				};
+				if (res.ok && body.messages?.[0]?.id) {
+					const waMessageId = body.messages[0].id;
+					await this.record(person.id, waMessageId, message, payload, opts, aiMetaJson, 'sent');
+					return { waMessageId, message, status: 'sent' };
+				}
+				lastError = JSON.stringify(body.error ?? body ?? { status: res.status });
+				lastStatus = res.status;
+				if (attempt < MAX_SEND_ATTEMPTS && isTransient(res.status)) {
+					await sleep(retryDelayMs(res, attempt));
+					continue;
+				}
+				break; // non-retryable, or out of attempts
+			} catch (err) {
+				// Network throw — retry if attempts remain, else fail.
+				lastError = JSON.stringify({ message: String(err) });
+				lastStatus = 0;
+				if (attempt < MAX_SEND_ATTEMPTS) {
+					await sleep(RETRY_BASE_MS * attempt);
+					continue;
+				}
 			}
-			const waMessageId = body.messages[0].id!;
-			await this.record(person.id, waMessageId, message, payload, opts, aiMetaJson, 'sent');
-			return { waMessageId, message, status: 'sent' };
-		} catch (err) {
-			const waMessageId = `failed-${crypto.randomUUID()}`;
-			await this.record(
-				person.id,
-				waMessageId,
-				message,
-				payload,
-				opts,
-				aiMetaJson,
-				'failed',
-				JSON.stringify({ message: String(err) })
-			);
-			console.error('WA send threw', err);
-			return { waMessageId, message, status: 'failed' };
 		}
+		const waMessageId = `failed-${crypto.randomUUID()}`;
+		await this.record(
+			person.id,
+			waMessageId,
+			message,
+			payload,
+			opts,
+			aiMetaJson,
+			'failed',
+			lastError
+		);
+		console.error('WA send failed', { status: lastStatus, error: lastError });
+		return { waMessageId, message, status: 'failed' };
 	}
 
 	private async postToMeta(payload: unknown): Promise<Response> {

@@ -133,3 +133,43 @@ describe('router: typing only on the decide() path', () => {
 		for (const c of calls) expect(c.body.typing_indicator).toBeUndefined(); // and no typing
 	});
 });
+
+describe('Sender.send — transient retry', () => {
+	const liveEnv = () =>
+		testEnv({ WA_ENABLED: 'true', WA_PHONE_NUMBER_ID: 'PN1', WA_ACCESS_TOKEN: 't' });
+
+	it('retries once on a 5xx and then succeeds', async () => {
+		let n = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				n++;
+				return n === 1
+					? new Response('boom', { status: 503 })
+					: new Response(JSON.stringify({ messages: [{ id: 'wamid.OK' }] }), { status: 200 });
+			})
+		);
+		const sender = new Sender(liveEnv(), new MemoryStore());
+		const sent = await sender.send({ id: 1, wa_id: '34600' }, [{ kind: 'text', body: 'hola' }]);
+		expect(n).toBe(2);
+		expect(sent[0]!.status).toBe('sent');
+		expect(sent[0]!.waMessageId).toBe('wamid.OK');
+	});
+
+	it('does NOT retry a 4xx (validation error) and records failed', async () => {
+		let n = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				n++;
+				return new Response(JSON.stringify({ error: { code: 131009, message: 'bad' } }), {
+					status: 400
+				});
+			})
+		);
+		const sender = new Sender(liveEnv(), new MemoryStore());
+		const sent = await sender.send({ id: 1, wa_id: '34600' }, [{ kind: 'text', body: 'hola' }]);
+		expect(n).toBe(1); // fail fast, no retry on 4xx
+		expect(sent[0]!.status).toBe('failed');
+	});
+});

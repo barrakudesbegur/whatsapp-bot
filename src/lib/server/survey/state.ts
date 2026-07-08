@@ -28,18 +28,30 @@ export async function loadDecisionState(
 
 	const [surveyRow, kbEntries, campaigns, courseStatus, courseNote, events, messages] =
 		await Promise.all([
+			// NOT fail-soft: this feeds the survey WRITE path. A transient null would
+			// make applyDecision create a DUPLICATE 'active' instance and orphan the
+			// person's progress. Better to drop this one turn (the decider never runs,
+			// the webhook still 200s) and let their next message retry once D1 recovers.
 			store.getLatestFlowInstance(person.id, SURVEY_ID),
-			store.listKbEntries(true),
-			// Fail-soft (like the events feed): a missing/broken campaigns table must
-			// degrade to "no campaigns", never silence the bot.
+			// Fail-soft: a transient D1 blip on any of these degradable READS must not
+			// reject the whole turn — that would silently drop the message (the webhook
+			// 200s and Meta never re-delivers), bypassing the decider's fallback ladder
+			// entirely. Degrade to a safe default and still answer.
+			store.listKbEntries(true).catch((err) => {
+				console.error('listKbEntries failed → static KB only', err);
+				return [];
+			}),
 			store.listCampaigns(true).catch((err) => {
 				console.error('listCampaigns failed → no campaign steering', err);
 				return [];
 			}),
-			store.getSetting('course_status'),
-			store.getSetting('course_status_note'),
+			store.getSetting('course_status').catch(() => null),
+			store.getSetting('course_status_note').catch(() => null),
 			fetchEventsSection(env),
-			store.listMessagesForPerson(person.id)
+			store.listMessagesForPerson(person.id).catch((err) => {
+				console.error('listMessagesForPerson failed → empty transcript', err);
+				return [];
+			})
 		]);
 
 	const collected = parseCollected(surveyRow?.data_json);
