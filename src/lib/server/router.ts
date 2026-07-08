@@ -32,6 +32,15 @@ import { nowIso } from './time.ts';
 
 const UNSUPPORTED = 'Ho sento, només sé llegir text 😅';
 
+// Per-sender daily budget guard. Caps the model-answered turns one person can
+// trigger per (UTC) day so a single spammer — or a runaway loop — can't drain the
+// whole 10k-neuron/day free-tier allocation and degrade every other member.
+// Generous on purpose: a full survey is a handful of turns, so no genuine user
+// hits it. Past the cap Kudi sends one canned bubble (no model call, zero neurons).
+const DAILY_TURN_CAP = 40;
+const RATE_LIMITED =
+	'Ei! Avui ja hem xerrat molt 😅 Seguim demà? Si és urgent, escriu-nos per Instagram @barrakudesbegur 🧡';
+
 // Inbounds whose envelope carries one of these phone_number_ids come from a
 // simulator (admin Simulador tab / chat CLI), not real WhatsApp — the person
 // gets flagged is_test so the admin can tell test data apart and filter it.
@@ -97,6 +106,15 @@ async function handleMessage(inbound: ParsedInbound, deps: RouterDeps): Promise<
 
 	// Media / audio / sticker: nothing to understand — apologize (+ nudge if mid-survey).
 	if (input.kind === 'unsupported') return handleUnsupported(person, deps);
+
+	// Budget guard: past the daily cap, answer with a canned bubble instead of the
+	// model — one cheap D1 count (checked after dedupe + the media short-circuit, so
+	// retries and free apologies don't consume budget) skips loadDecisionState +
+	// decide() entirely. The current inbound is already counted (inserted above).
+	const dayStart = now.slice(0, 10) + 'T00:00:00.000Z';
+	if ((await store.countInboundSince(person.id, dayStart)) > DAILY_TURN_CAP) {
+		return deps.sender.send(person, [{ kind: 'text', body: RATE_LIMITED }]);
+	}
 
 	// Everything a human says (typed text OR a tapped option's title) → the model.
 	// Mark it read + show "typing…" first, so the model's think-time reads as Kudi

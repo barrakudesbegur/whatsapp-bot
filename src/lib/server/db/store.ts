@@ -114,6 +114,9 @@ export interface Store {
 		errorJson: string | null,
 		at: string
 	): Promise<boolean>;
+	/** Count inbound messages from a person at/after `sinceIso` — the per-sender
+	 *  daily budget guard (keeps one spammer from draining the free-tier AI quota). */
+	countInboundSince(personId: number, sinceIso: string): Promise<number>;
 
 	// Flow instances (the per-person, per-flow submission draft).
 	/** The latest instance of `flowType` for a person (their survey draft). */

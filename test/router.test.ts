@@ -283,3 +283,33 @@ describe('degradation: an empty decider queue falls back without mutating', () =
 		expect(await h.store.getLatestFlowInstance(person!.id, 'curs-sardanes')).toBeNull();
 	});
 });
+
+describe('per-sender daily budget guard', () => {
+	it('past the daily cap, sends a canned bubble and never calls the model', async () => {
+		const h = newHarness();
+		const person = await h.store.upsertPerson(WA, null, new Date().toISOString());
+		const today = new Date().toISOString().slice(0, 10) + 'T08:00:00.000Z';
+		for (let i = 0; i < 41; i++) {
+			await h.store.insertInboundMessage({
+				waMessageId: `seed-${i}`,
+				personId: person.id,
+				msgType: 'text',
+				bodyJson: JSON.stringify({ text: { body: 'x' } }),
+				createdAt: today
+			});
+		}
+		enqueue(h, { replies: [{ text: 'MODEL REPLY' }], actions: [] });
+		const callsBefore = h.decider.calls;
+		const out = await text(h, WA, 'una més');
+		expect(h.decider.calls).toBe(callsBefore); // model NOT invoked past the cap
+		expect(bodies(out)).toContain('demà'); // the canned "seguim demà" bubble
+	});
+
+	it('a normal conversation stays well under the cap and the model answers', async () => {
+		const h = newHarness();
+		enqueue(h, { replies: [{ text: 'ei!' }], actions: [] });
+		const out = await text(h, WA, 'hola');
+		expect(h.decider.calls).toBe(1);
+		expect(bodies(out)).toContain('ei!');
+	});
+});

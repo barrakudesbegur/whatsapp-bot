@@ -148,6 +148,17 @@ export class D1Store implements Store {
 		return row !== null;
 	}
 
+	async countInboundSince(personId: number, sinceIso: string): Promise<number> {
+		const row = await this.db
+			.prepare(
+				`SELECT COUNT(*) AS n FROM messages
+           WHERE person_id = ?1 AND direction = 'in' AND created_at >= ?2`
+			)
+			.bind(personId, sinceIso)
+			.first<{ n: number }>();
+		return row?.n ?? 0;
+	}
+
 	async getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null> {
 		return await this.db
 			.prepare(

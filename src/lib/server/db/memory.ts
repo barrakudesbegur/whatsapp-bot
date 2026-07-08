@@ -164,6 +164,12 @@ export class MemoryStore implements Store {
 		return true;
 	}
 
+	async countInboundSince(personId: number, sinceIso: string): Promise<number> {
+		return this.messages.filter(
+			(m) => m.person_id === personId && m.direction === 'in' && m.created_at >= sinceIso
+		).length;
+	}
+
 	// Flow instances --------------------------------------------------------
 	async getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null> {
 		const list = this.flows
