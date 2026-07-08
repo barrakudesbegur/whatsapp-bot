@@ -46,7 +46,6 @@ const kb = buildKbBlock({
 
 function state(over: Partial<DecisionState>): DecisionState {
 	return {
-		now: new Date().toISOString(),
 		person: { displayName: null, profileName: null, isAnonymous: false },
 		survey: {
 			status: 'none',
@@ -55,13 +54,8 @@ function state(over: Partial<DecisionState>): DecisionState {
 		},
 		missing: ['name', 'signup', 'availability'],
 		campaigns: [
-			{
-				slug: 'curs-sardanes',
-				title: 'Curs de sardanes',
-				pitch: 'Estem explorant muntar un curs de sardanes a Begur.'
-			}
+			{ title: 'Curs de sardanes', pitch: 'Estem explorant muntar un curs de sardanes a Begur.' }
 		],
-		course: { status: 'exploring', note: '' },
 		kb,
 		transcript: [],
 		userMessage: '',

@@ -13,8 +13,10 @@
  *  - `fallbackDecision` is the deterministic, NEVER-mutating reply used when the
  *    model errors or returns garbage (graceful degradation).
  *
- * `Decider` is the seam: `WorkersAiDecider` in production, `ScriptedDecider` in
- * tests — so every conversation branch is exercised deterministically.
+ * `Decider` is the seam with three implementations: `WorkersAiDecider` (prod),
+ * `FakeDecider` (DEV_FAKE_AI local/e2e — a deterministic rule-based flow, no
+ * neurons), and `ScriptedDecider` (unit tests) — so every conversation branch is
+ * exercised deterministically.
  */
 
 import * as v from 'valibot';
@@ -96,7 +98,6 @@ export interface Decision {
 // --- State handed to the model each turn ----------------------------------
 
 export interface DecisionState {
-	now: string;
 	person: { displayName: string | null; profileName: string | null; isAnonymous: boolean };
 	survey: {
 		status: 'none' | 'active' | 'completed' | 'declined';
@@ -110,9 +111,9 @@ export interface DecisionState {
 	/** Fields still worth asking for, in ask order. Derived, handed to the model as data. */
 	missing: ('name' | 'signup' | 'availability')[];
 	/** Active campaigns (0..N, highest priority first) Kudi gently steers toward. */
-	campaigns: { slug: string; title: string; pitch: string }[];
-	course: { status: string; note: string };
-	/** Assembled knowledge block (static KB + active entries + live events). */
+	campaigns: { title: string; pitch: string }[];
+	/** Assembled knowledge block (static KB + active entries + live events). The
+	 *  course status/note also reach the model through here (buildKbBlock). */
 	kb: string;
 	/** Last few turns as {role,text} for context. */
 	transcript: { role: 'user' | 'kudi'; text: string }[];
@@ -136,7 +137,8 @@ export interface DecideOutput {
 	meta: AiMeta;
 }
 
-/** The single understanding seam: WorkersAiDecider (prod) / ScriptedDecider (tests). */
+/** The single understanding seam: WorkersAiDecider (prod) / FakeDecider (DEV_FAKE_AI
+ *  local + e2e) / ScriptedDecider (unit tests). */
 export interface Decider {
 	decide(state: DecisionState): Promise<DecideOutput>;
 }

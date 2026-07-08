@@ -83,7 +83,6 @@ export function bodies(sent: SentMessage[]): string {
 // A DecisionState with sane defaults for unit-testing applyDecision directly.
 export function makeState(over: Partial<DecisionState> = {}): DecisionState {
 	return {
-		now: '2026-07-06T00:00:00.000Z',
 		person: { displayName: null, profileName: null, isAnonymous: false },
 		survey: {
 			status: 'none',
@@ -92,13 +91,8 @@ export function makeState(over: Partial<DecisionState> = {}): DecisionState {
 		},
 		missing: ['name', 'signup', 'availability'],
 		campaigns: [
-			{
-				slug: 'curs-sardanes',
-				title: 'Curs de sardanes',
-				pitch: 'Estem explorant muntar un curs de sardanes a Begur.'
-			}
+			{ title: 'Curs de sardanes', pitch: 'Estem explorant muntar un curs de sardanes a Begur.' }
 		],
-		course: { status: 'exploring', note: '' },
 		kb: 'KB',
 		transcript: [],
 		userMessage: 'hola',

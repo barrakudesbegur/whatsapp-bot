@@ -193,7 +193,7 @@ export class Sender {
 		status: string,
 		errorJson: string | null = null
 	): Promise<void> {
-		const row = await this.store.insertOutboundMessage({
+		await this.store.insertOutboundMessage({
 			waMessageId,
 			personId,
 			msgType: msgType(_message),
@@ -206,6 +206,5 @@ export class Sender {
 		if (errorJson) {
 			await this.store.updateOutboundStatus(waMessageId, status, errorJson, nowIso());
 		}
-		void row;
 	}
 }

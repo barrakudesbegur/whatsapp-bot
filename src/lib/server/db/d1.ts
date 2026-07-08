@@ -102,13 +102,13 @@ export class D1Store implements Store {
 		return row !== null; // null → conflict ignored (duplicate)
 	}
 
-	async insertOutboundMessage(input: InsertOutboundInput): Promise<MessageRow> {
-		const row = await this.db
+	async insertOutboundMessage(input: InsertOutboundInput): Promise<void> {
+		// No RETURNING: the sole caller discarded the row (it just needs the write).
+		await this.db
 			.prepare(
 				`INSERT INTO messages
            (wa_message_id, person_id, direction, msg_type, body_json, status, flow_instance_id, ai_meta_json, created_at)
-         VALUES (?1, ?2, 'out', ?3, ?4, ?5, ?6, ?7, ?8)
-         RETURNING *`
+         VALUES (?1, ?2, 'out', ?3, ?4, ?5, ?6, ?7, ?8)`
 			)
 			.bind(
 				input.waMessageId,
@@ -120,8 +120,7 @@ export class D1Store implements Store {
 				input.aiMetaJson ?? null,
 				input.createdAt
 			)
-			.first<MessageRow>();
-		return row as MessageRow;
+			.run();
 	}
 
 	async getMessageByWaId(waMessageId: string): Promise<MessageRow | null> {

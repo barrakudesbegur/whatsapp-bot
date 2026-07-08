@@ -18,12 +18,9 @@ export type InboundInput =
 
 export interface ParsedMessage {
 	waMessageId: string;
-	from: string;
 	/** D1 msg_type: text | button_reply | list_reply | <raw media type>. */
 	msgType: string;
 	input: InboundInput;
-	/** Interactive replies carry context.id → the outbound message replied to. */
-	contextId?: string;
 	raw: InboundMessage;
 }
 
@@ -101,10 +98,8 @@ export function parseWebhook(envelope: WebhookEnvelope): ParsedWebhook {
 					phoneNumberId,
 					message: {
 						waMessageId: m.id,
-						from: m.from,
 						msgType,
 						input,
-						contextId: m.context?.id,
 						raw: m
 					}
 				});

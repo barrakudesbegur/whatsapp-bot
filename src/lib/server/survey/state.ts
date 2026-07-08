@@ -11,7 +11,6 @@ import { buildKbBlock } from '../ai/prompt.ts';
 import { STATIC_KB } from '../kb/static.ts';
 import { fetchEventsSection } from '../kb/events.ts';
 import { SURVEY_ID, parseCollected, deriveMissing, type SurveyStatus } from './spec.ts';
-import { nowIso } from '../time.ts';
 
 export interface StateDeps {
 	store: Store;
@@ -74,7 +73,6 @@ export async function loadDecisionState(
 	});
 
 	return {
-		now: nowIso(),
 		person: {
 			displayName: person.display_name,
 			profileName: person.profile_name,
@@ -82,8 +80,7 @@ export async function loadDecisionState(
 		},
 		survey: { status, collected, instanceId: surveyRow?.id ?? null },
 		missing: deriveMissing(collected, person.display_name),
-		campaigns: campaigns.map((c) => ({ slug: c.slug, title: c.title, pitch: c.pitch_md })),
-		course: { status: courseStatus ?? 'exploring', note: courseNote ?? '' },
+		campaigns: campaigns.map((c) => ({ title: c.title, pitch: c.pitch_md })),
 		kb,
 		transcript: buildTranscript(messages, userMessage),
 		userMessage,

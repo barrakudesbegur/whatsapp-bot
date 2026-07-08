@@ -128,8 +128,8 @@ export class MemoryStore implements Store {
 		return true;
 	}
 
-	async insertOutboundMessage(input: InsertOutboundInput): Promise<MessageRow> {
-		const row: MessageRow = {
+	async insertOutboundMessage(input: InsertOutboundInput): Promise<void> {
+		this.messages.push({
 			id: ++this.seq.message,
 			wa_message_id: input.waMessageId,
 			person_id: input.personId,
@@ -141,9 +141,7 @@ export class MemoryStore implements Store {
 			flow_instance_id: input.flowInstanceId ?? null,
 			ai_meta_json: input.aiMetaJson ?? null,
 			created_at: input.createdAt
-		};
-		this.messages.push(row);
-		return { ...row };
+		});
 	}
 
 	async getMessageByWaId(waMessageId: string): Promise<MessageRow | null> {

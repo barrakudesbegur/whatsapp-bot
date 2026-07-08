@@ -96,8 +96,8 @@ describe('buildDecideMessages', () => {
 		const [system] = buildDecideMessages(
 			makeState({
 				campaigns: [
-					{ slug: 'curs-sardanes', title: 'Curs de sardanes', pitch: 'Explorant un curs.' },
-					{ slug: 'festa-major', title: 'Festa Major', pitch: 'Voluntariat obert!' }
+					{ title: 'Curs de sardanes', pitch: 'Explorant un curs.' },
+					{ title: 'Festa Major', pitch: 'Voluntariat obert!' }
 				]
 			})
 		);
@@ -203,7 +203,7 @@ describe('loadDecisionState', () => {
 		expect(state.survey.collected.signup).toBe('avisam');
 		expect(state.missing).toEqual(['availability']);
 		// The seeded curs-sardanes campaign flows into the state (active-only).
-		expect(state.campaigns.map((c) => c.slug)).toEqual(['curs-sardanes']);
+		expect(state.campaigns.map((c) => c.title)).toEqual(['Curs de sardanes']);
 		expect(state.kb).toContain('Entrada activa');
 		expect(state.kb).not.toContain('Entrada desactivada');
 	});

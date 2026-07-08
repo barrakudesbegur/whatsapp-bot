@@ -106,7 +106,7 @@ export interface Store {
 	// Messages
 	/** Returns false when the wa_message_id already existed (retry → ignore). */
 	insertInboundMessage(input: InsertInboundInput): Promise<boolean>;
-	insertOutboundMessage(input: InsertOutboundInput): Promise<MessageRow>;
+	insertOutboundMessage(input: InsertOutboundInput): Promise<void>;
 	getMessageByWaId(waMessageId: string): Promise<MessageRow | null>;
 	updateOutboundStatus(
 		waMessageId: string,
