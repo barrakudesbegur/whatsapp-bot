@@ -94,6 +94,9 @@ export class MemoryStore implements Store {
 
 	async anonymizePerson(personId: number, at: string): Promise<void> {
 		this.messages = this.messages.filter((m) => m.person_id !== personId);
+		// Scrub survey free text too (mirrors D1Store): data_json holds verbatim
+		// availability notes the person typed.
+		for (const f of this.flows) if (f.person_id === personId) f.data_json = '{}';
 		const p = this.people.find((p) => p.id === personId);
 		if (p) {
 			p.gdpr_deleted = 1;
@@ -312,7 +315,10 @@ export class MemoryStore implements Store {
 	async exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]> {
 		return this.flows
 			.filter((f) => f.flow_type === flowType && f.status === 'completed')
-			.filter((f) => this.people.find((p) => p.id === f.person_id)?.is_test !== 1)
+			.filter((f) => {
+				const p = this.people.find((p) => p.id === f.person_id);
+				return p != null && p.is_test !== 1 && p.gdpr_deleted !== 1;
+			})
 			.sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? '') || b.id - a.id)
 			.map((f) => {
 				const p = this.people.find((p) => p.id === f.person_id);

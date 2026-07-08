@@ -32,6 +32,9 @@ import { getRequestEvent } from '$app/server';
 /** The subset of `platform.env` this module reads (generated Env is a superset). */
 export interface AccessEnv {
 	DEV_ACCESS_BYPASS?: string;
+	/** Prod pins this "true"; local .dev.vars overrides it to "false". Used only as
+	 *  the production interlock for DEV_ACCESS_BYPASS below (mirrors makeDecider). */
+	WA_ENABLED?: string;
 	CF_ACCESS_TEAM_DOMAIN?: string;
 	CF_ACCESS_AUD?: string;
 	CF_ACCESS_EMAIL_DOMAIN?: string;
@@ -85,8 +88,14 @@ export async function verifyAccess(
 	request: Request,
 	env: AccessEnv | undefined
 ): Promise<AccessIdentity | null> {
-	// Local-dev bypass — NEVER set in production. Fails closed unless exactly "true".
-	if (env?.DEV_ACCESS_BYPASS === 'true') return { email: 'dev@localhost' };
+	// Local-dev bypass — NEVER effective in production. Interlocked to WA being
+	// disabled (WA_ENABLED !== 'true'), exactly like makeDecider's FakeDecider latch
+	// (bindings.ts): prod pins WA_ENABLED="true" in wrangler.jsonc, and local
+	// .dev.vars overrides it to "false". So even if DEV_ACCESS_BYPASS ever leaked
+	// into a prod secret, the bypass stays closed there. Both conditions required.
+	if (env?.DEV_ACCESS_BYPASS === 'true' && env?.WA_ENABLED !== 'true') {
+		return { email: 'dev@localhost' };
+	}
 
 	const team = env?.CF_ACCESS_TEAM_DOMAIN;
 	// Comma-separated: the production app's AUD plus (optionally) the preview app's.

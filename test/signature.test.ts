@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { hmacSha256Hex, verifySignature } from '../src/lib/server/signature.ts';
+import { hmacSha256Hex, verifySignature, timingSafeEqual } from '../src/lib/server/signature.ts';
 
 const SECRET = 'test-app-secret';
 const BODY = JSON.stringify({ object: 'whatsapp_business_account', entry: [] });
@@ -47,5 +47,14 @@ describe('verifySignature', () => {
 	it('rejects a malformed header', async () => {
 		expect(await verifySignature(SECRET, 'garbage', BODY)).toBe(false);
 		expect(await verifySignature(SECRET, 'sha256=', BODY)).toBe(false);
+	});
+});
+
+describe('timingSafeEqual', () => {
+	it('is true only for identical strings', () => {
+		expect(timingSafeEqual('verify-token-abc', 'verify-token-abc')).toBe(true);
+		expect(timingSafeEqual('verify-token-abc', 'verify-token-abd')).toBe(false);
+		expect(timingSafeEqual('abc', 'ab')).toBe(false); // length mismatch
+		expect(timingSafeEqual('', '')).toBe(true);
 	});
 });

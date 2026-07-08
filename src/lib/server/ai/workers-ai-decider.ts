@@ -87,8 +87,13 @@ export class WorkersAiDecider implements Decider {
 			const decision = parseDecision(textOf(res));
 			if (decision) return { decision, meta: this.meta(t0, tokensOf(res)) };
 			// Ran fine but produced unusable JSON → deterministic (non-mutating) fallback.
+			// Log STRUCTURE, not content: the raw model output routinely contains the
+			// person's first name («Genial, Laia!»), and observability retains logs
+			// outside the D1 erase path. Length + shape is enough to debug a parse miss.
+			const raw = textOf(res);
 			console.error('decide(): model returned unusable output → fallback', {
-				sample: textOf(res).slice(0, 200)
+				length: raw.length,
+				startsWithBrace: raw.trimStart().startsWith('{')
 			});
 			return { decision: fallbackDecision(state), meta: this.meta(t0, tokensOf(res)) };
 		} catch (err) {

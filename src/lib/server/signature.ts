@@ -9,8 +9,13 @@
 
 const encoder = new TextEncoder();
 
-/** Constant-time compare of two equal-length hex strings. */
-function timingSafeEqualHex(a: string, b: string): boolean {
+/**
+ * Constant-time string compare (no early return on the first differing byte).
+ * Used for the HMAC hex compare below AND the webhook verify-token handshake, so
+ * neither leaks its secret through response timing. (A length mismatch still
+ * short-circuits — an acceptable, negligible signal.)
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
 	if (a.length !== b.length) return false;
 	let diff = 0;
 	for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -51,5 +56,5 @@ export async function verifySignature(
 	const [scheme, provided] = header.split('=', 2);
 	if (scheme !== 'sha256' || !provided) return false;
 	const expected = await hmacSha256Hex(secret, rawBody);
-	return timingSafeEqualHex(provided.toLowerCase(), expected);
+	return timingSafeEqual(provided.toLowerCase(), expected);
 }

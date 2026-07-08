@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readAccessToken } from '../src/lib/server/access.ts';
+import { readAccessToken, verifyAccess } from '../src/lib/server/access.ts';
 
 const req = (headers: Record<string, string>) => new Request('https://x/', { headers });
 
@@ -45,5 +45,23 @@ describe('readAccessToken', () => {
 
 	it('treats an empty CF_Authorization value as absent', () => {
 		expect(readAccessToken(req({ cookie: 'CF_Authorization=' }))).toBeNull();
+	});
+});
+
+describe('verifyAccess — dev bypass production interlock', () => {
+	const bare = () => new Request('https://x/'); // no Access JWT
+
+	it('bypasses locally: DEV_ACCESS_BYPASS with WA disabled', async () => {
+		expect(await verifyAccess(bare(), { DEV_ACCESS_BYPASS: 'true', WA_ENABLED: 'false' })).toEqual({
+			email: 'dev@localhost'
+		});
+	});
+
+	it('does NOT bypass when WA is enabled (prod), even with the flag set', async () => {
+		// Interlock holds: with no JWT and no Access config it falls through to null
+		// instead of granting admin — a leaked prod DEV_ACCESS_BYPASS opens nothing.
+		expect(
+			await verifyAccess(bare(), { DEV_ACCESS_BYPASS: 'true', WA_ENABLED: 'true' })
+		).toBeNull();
 	});
 });

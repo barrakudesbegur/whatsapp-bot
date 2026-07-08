@@ -68,6 +68,13 @@ export class D1Store implements Store {
 	async anonymizePerson(personId: number, at: string): Promise<void> {
 		await this.db.batch([
 			this.db.prepare(`DELETE FROM messages WHERE person_id = ?1`).bind(personId),
+			// Scrub the survey free text too: data_json holds verbatim availability
+			// notes the person typed («divendres a la nit a casa la Núria»). Deleting
+			// messages alone left that PII behind (GDPR Art.17). Keep the row (blanked)
+			// so completed-count aggregates don't shift; the export now excludes it.
+			this.db
+				.prepare(`UPDATE flow_instances SET data_json = '{}' WHERE person_id = ?1`)
+				.bind(personId),
 			this.db
 				.prepare(
 					`UPDATE people
@@ -322,7 +329,8 @@ export class D1Store implements Store {
                 f.data_json, f.completed_at
            FROM flow_instances f
            JOIN people p ON p.id = f.person_id
-          WHERE f.flow_type = ?1 AND f.status = 'completed' AND p.is_test = 0
+          WHERE f.flow_type = ?1 AND f.status = 'completed'
+                AND p.is_test = 0 AND p.gdpr_deleted = 0
           ORDER BY f.completed_at DESC, f.id DESC`
 			)
 			.bind(flowType)

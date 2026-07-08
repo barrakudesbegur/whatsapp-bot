@@ -7,7 +7,7 @@
  */
 
 import type { RequestHandler } from './$types';
-import { verifySignature } from '$lib/server/signature';
+import { verifySignature, timingSafeEqual } from '$lib/server/signature';
 import { handleWebhook } from '$lib/server/router';
 import { getDeps } from '$lib/server/bindings';
 import type { WebhookEnvelope } from '$lib/server/wa/wire';
@@ -17,7 +17,8 @@ export const GET: RequestHandler = ({ url, platform }) => {
 	const mode = url.searchParams.get('hub.mode');
 	const token = url.searchParams.get('hub.verify_token');
 	const challenge = url.searchParams.get('hub.challenge');
-	if (mode === 'subscribe' && token && token === platform?.env?.WA_VERIFY_TOKEN) {
+	const expected = platform?.env?.WA_VERIFY_TOKEN;
+	if (mode === 'subscribe' && token && expected && timingSafeEqual(token, expected)) {
 		return new Response(challenge ?? '', { status: 200 });
 	}
 	return new Response('forbidden', { status: 403 });
