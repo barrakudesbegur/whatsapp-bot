@@ -1,0 +1,56 @@
+name: CI
+
+# Lint + typecheck + unit tests on every push to main and every pull request.
+# Deploy is a SEPARATE workflow (deploy.yml) and is not gated by this.
+#
+# The Playwright e2e suite is intentionally NOT run here: it needs a `vite dev`
+# server whose Cloudflare AI binding opens an authenticated remote proxy at boot,
+# which requires account credentials a CI runner does not have. Run it locally
+# with `npm run test:e2e`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint & typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # svelte-check typechecks against the Env type `wrangler types` generates,
+      # which includes the WA_* secrets that live in .dev.vars locally. Without a
+      # .dev.vars those keys are missing and src/routes/webhook/+server.ts fails to
+      # typecheck. The example holds only dev placeholders (no real secrets).
+      - run: cp .dev.vars.example .dev.vars
+      # prettier --check + eslint + svelte-check. `check` regenerates the
+      # gitignored worker-configuration.d.ts via `wrangler types` itself (offline).
+      - run: npm run validate
+
+  unit:
+    name: Unit tests (vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit -- --run
