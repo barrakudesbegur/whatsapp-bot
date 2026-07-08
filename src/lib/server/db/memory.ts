@@ -334,6 +334,11 @@ export class MemoryStore implements Store {
 			.map((m) => ({ ...m }));
 	}
 
+	async listRecentMessagesForPerson(personId: number, limit: number): Promise<MessageRow[]> {
+		const all = await this.listMessagesForPerson(personId);
+		return all.slice(-limit);
+	}
+
 	async exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]> {
 		return this.flows
 			.filter((f) => f.flow_type === flowType && f.status === 'completed')

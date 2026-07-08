@@ -48,8 +48,10 @@ export async function loadDecisionState(
 			store.getSetting('course_status').catch(() => null),
 			store.getSetting('course_status_note').catch(() => null),
 			fetchEventsSection(env),
-			store.listMessagesForPerson(person.id).catch((err) => {
-				console.error('listMessagesForPerson failed → empty transcript', err);
+			// Only the tail is needed (buildTranscript keeps the last 6); 12 leaves
+			// headroom for media rows filtered out + the current-inbound drop.
+			store.listRecentMessagesForPerson(person.id, 12).catch((err) => {
+				console.error('listRecentMessagesForPerson failed → empty transcript', err);
 				return [];
 			})
 		]);

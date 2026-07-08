@@ -217,11 +217,16 @@ function userBlock(state: DecisionState): string {
 	// prefix-cacheable. It sits right before the person's message so the model
 	// acts on the freshest state. Kudi's own data, not person-controlled input —
 	// the person's text stays fenced in <missatge>.
+	// Neutralize any literal fence tokens the person typed so they can't close the
+	// <missatge> block early and inject instructions after it. The code-authority
+	// design (valibot action whitelist, grounded names, KB-only image URLs) already
+	// caps the blast radius to this one conversation; this is belt-and-suspenders.
+	const fenced = state.userMessage.replace(/<\/?missatge>/gi, '');
 	return (
 		'## ESTAT ACTUAL (el que ja saps d’aquesta persona)\n' +
 		draftSummary(state) +
 		'\n\n' +
-		`Missatge de la persona${note}:\n<missatge>\n${state.userMessage}\n</missatge>\n` +
+		`Missatge de la persona${note}:\n<missatge>\n${fenced}\n</missatge>\n` +
 		'(Recorda: respon NOMÉS amb el JSON {"replies":[…],"actions":[…]} — cap text fora del JSON.)'
 	);
 }

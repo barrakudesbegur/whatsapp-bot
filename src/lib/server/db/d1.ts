@@ -343,6 +343,18 @@ export class D1Store implements Store {
 		return results ?? [];
 	}
 
+	async listRecentMessagesForPerson(personId: number, limit: number): Promise<MessageRow[]> {
+		// DESC + LIMIT reads only the tail (idx_messages_person_created supports it),
+		// then reverse to chronological for the transcript builder.
+		const { results } = await this.db
+			.prepare(
+				`SELECT * FROM messages WHERE person_id = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2`
+			)
+			.bind(personId, limit)
+			.all<MessageRow>();
+		return (results ?? []).reverse();
+	}
+
 	async exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]> {
 		const { results } = await this.db
 			.prepare(

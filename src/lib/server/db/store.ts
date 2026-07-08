@@ -156,7 +156,11 @@ export interface Store {
 
 	// Admin read helpers (used by /admin/api/* and verification).
 	listConversations(limit?: number): Promise<ConversationSummary[]>;
+	/** ALL messages for a person, chronological — the admin conversation view. */
 	listMessagesForPerson(personId: number): Promise<MessageRow[]>;
+	/** The last `limit` messages, chronological — the decide() transcript tail.
+	 *  Bounds per-turn rows-read + JSON parsing no matter how long the chat gets. */
+	listRecentMessagesForPerson(personId: number, limit: number): Promise<MessageRow[]>;
 	/** Completed instances of a flow, joined with the person, for CSV export. */
 	exportCompletedFlows(flowType: string): Promise<CompletedFlowRow[]>;
 }
