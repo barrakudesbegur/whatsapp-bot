@@ -47,11 +47,14 @@ const TEMPERATURE = 0.3;
 const REPETITION_PENALTY = 1.05;
 const FREQUENCY_PENALTY = 0.1;
 
-// Hard cap on model think-time — production saw a 195 s hang (gemma-4); better
-// to trip the deterministic fallback than keep the person waiting forever.
-// Generous on purpose (owner's call): a slow real answer beats a fast apology,
-// even though WhatsApp's typing indicator only lasts ~25 s.
-const TIMEOUT_MS = 90_000;
+// Hard cap on model think-time. Now that the webhook fast-acks and finishes the
+// pipeline in ctx.waitUntil (webhook/+server.ts), the cap must fit the background
+// task budget AND WhatsApp's ~25 s typing window — a reply that lands after the
+// person has concluded Kudi is broken is worthless, and a runaway decode just
+// burns the free-tier budget. 25 s trips the deterministic fallback before either
+// limit; fp8-fast's p50 is ~3 s, so only the pathological tail is cut. (History:
+// a 195 s gemma-4 hang is why this cap exists at all.)
+const TIMEOUT_MS = 25_000;
 
 interface ChatResult {
 	response?: unknown;

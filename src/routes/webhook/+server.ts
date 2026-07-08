@@ -38,11 +38,23 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		return new Response('bad request', { status: 400 });
 	}
 
-	try {
-		await handleWebhook(envelope, getDeps());
-	} catch (err) {
-		// Never make Meta retry-storm us; inbound is already deduped. Log + 200.
+	// getDeps() reads the request's ALS scope (env + D1), so it MUST be built here,
+	// not inside the background task. Nothing downstream calls getRequestEvent().
+	const deps = getDeps();
+	const work = handleWebhook(envelope, deps).catch((err) => {
+		// Never make Meta retry-storm us; the inbound is already deduped. Log + 200.
 		console.error('webhook processing error', err);
+	});
+
+	// Fast-ack in production: return 200 to Meta immediately and finish the pipeline
+	// (the model call + sends) in the background, so a slow turn never delays the ack
+	// or risks Meta throttling the webhook. Locally (WA disabled — vite dev, the chat
+	// CLI, e2e) there is no background-task budget and the chat CLI reads replies from
+	// D1 right after the POST resolves, so AWAIT inline there instead.
+	if (platform?.env?.WA_ENABLED === 'true' && platform.ctx?.waitUntil) {
+		platform.ctx.waitUntil(work);
+	} else {
+		await work;
 	}
 	return new Response('EVENT_RECEIVED', { status: 200 });
 };
