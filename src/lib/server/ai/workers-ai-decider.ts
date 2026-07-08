@@ -34,12 +34,15 @@ export const PRIMARY_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 // Generation bounds. Kudi's bubbles must be SHORT (owner requirement), so
 // max_tokens caps the damage of a rambling turn while leaving room for
-// multi-bubble JSON. The penalties are MILD on purpose: the aggressive values
-// tried before (repetition 1.2 + frequency 0.4) corrupted Catalan morphology
-// ("t'explichi") by pre-penalizing correct tokens already present in the large
-// prompt — and cross-turn re-asking is prevented by real transcript turns in
-// the prompt, not by decoding penalties.
-const MAX_TOKENS = 1024;
+// multi-bubble JSON. 768 is comfortable headroom for a normal Decision (1–3
+// short bubbles + a control + actions is ~350 output tokens) while bounding a
+// runaway generation — output tokens bill ~7.7x input, so an uncapped ramble is
+// both the slowest AND the most expensive failure. The penalties are MILD on
+// purpose: the aggressive values tried before (repetition 1.2 + frequency 0.4)
+// corrupted Catalan morphology ("t'explichi") by pre-penalizing correct tokens
+// already present in the large prompt — and cross-turn re-asking is prevented by
+// real transcript turns in the prompt, not by decoding penalties.
+const MAX_TOKENS = 768;
 const TEMPERATURE = 0.3;
 const REPETITION_PENALTY = 1.05;
 const FREQUENCY_PENALTY = 0.1;
@@ -62,6 +65,10 @@ type RunInput = {
 	frequency_penalty?: number;
 };
 
+/** The subset of Workers AI `run` options we use — extra request headers, for
+ * the `x-session-affinity` prefix-cache routing hint. */
+type AiRunOptions = { extraHeaders?: Record<string, string> };
+
 export class WorkersAiDecider implements Decider {
 	private readonly model: string;
 
@@ -76,7 +83,7 @@ export class WorkersAiDecider implements Decider {
 		const t0 = Date.now();
 		const messages = buildDecideMessages(state);
 		try {
-			const res = await this.run(messages);
+			const res = await this.run(messages, state.sessionKey);
 			const decision = parseDecision(textOf(res));
 			if (decision) return { decision, meta: this.meta(t0, tokensOf(res)) };
 			// Ran fine but produced unusable JSON → deterministic (non-mutating) fallback.
@@ -90,10 +97,10 @@ export class WorkersAiDecider implements Decider {
 		}
 	}
 
-	private run(messages: DecideMessage[]): Promise<unknown> {
+	private run(messages: DecideMessage[], sessionKey?: string): Promise<unknown> {
 		// Call through env.AI (a detached `run` loses its `this` and throws).
 		const ai = this.env.AI as unknown as {
-			run(model: string, input: RunInput): Promise<unknown>;
+			run(model: string, input: RunInput, options?: AiRunOptions): Promise<unknown>;
 		};
 		const input: RunInput = {
 			messages,
@@ -102,6 +109,13 @@ export class WorkersAiDecider implements Decider {
 			repetition_penalty: REPETITION_PENALTY,
 			frequency_penalty: FREQUENCY_PENALTY
 		};
+		// Prefix caching: route this person's turns to the same warm instance so
+		// the identical system prefix is served from cache (discounted tokens +
+		// faster TTFT) instead of being re-prefilled. Omitted (no header) when we
+		// have no stable key — the model still runs, just without the cache hint.
+		const options: AiRunOptions | undefined = sessionKey
+			? { extraHeaders: { 'x-session-affinity': sessionKey } }
+			: undefined;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const timedOut = new Promise<never>((_, reject) => {
 			timer = setTimeout(
@@ -109,7 +123,9 @@ export class WorkersAiDecider implements Decider {
 				this.timeoutMs
 			);
 		});
-		return Promise.race([ai.run(this.model, input), timedOut]).finally(() => clearTimeout(timer));
+		return Promise.race([ai.run(this.model, input, options), timedOut]).finally(() =>
+			clearTimeout(timer)
+		);
 	}
 
 	private meta(t0: number, tokens?: number): AiMeta {

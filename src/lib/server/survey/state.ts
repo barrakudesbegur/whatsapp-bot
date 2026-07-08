@@ -73,7 +73,11 @@ export async function loadDecisionState(
 		kb,
 		transcript: buildTranscript(messages, userMessage),
 		userMessage,
-		tapped
+		tapped,
+		// Route this person's turns to the same Workers AI instance so the stable
+		// system prefix stays warm in the prefix cache. Internal id, not the phone
+		// number — opaque and non-PII.
+		sessionKey: `p${person.id}`
 	};
 }
 

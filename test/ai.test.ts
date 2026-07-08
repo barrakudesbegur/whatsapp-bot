@@ -33,7 +33,7 @@ describe('buildKbBlock', () => {
 });
 
 describe('buildDecideMessages', () => {
-	it('system prompt carries the draft, the missing fields and the action whitelist', () => {
+	it('keeps the action whitelist in the (cacheable) system prompt; the draft + missing ride in the final user turn', () => {
 		const [system, user] = buildDecideMessages(
 			makeState({
 				person: { displayName: 'Pol', profileName: null, isAnonymous: false },
@@ -47,11 +47,17 @@ describe('buildDecideMessages', () => {
 			})
 		);
 		expect(system!.role).toBe('system');
-		expect(system!.content).toContain('- nom: Pol');
-		expect(system!.content).toContain('- signup: grup');
-		expect(system!.content).toContain('FALTA (en aquest ordre): availability');
+		// The action whitelist is stable → stays in the prefix-cacheable system prompt.
 		expect(system!.content).toContain('record_availability');
 		expect(system!.content).toContain('set_display_name');
+		// The per-turn draft is volatile → it must NOT be in the system prompt
+		// (that would break prefix caching), but ride in the final user turn.
+		expect(system!.content).not.toContain('- nom: Pol');
+		expect(system!.content).not.toContain('FALTA (en aquest ordre)');
+		expect(user!.role).toBe('user');
+		expect(user!.content).toContain('- nom: Pol');
+		expect(user!.content).toContain('- signup: grup');
+		expect(user!.content).toContain('FALTA (en aquest ordre): availability');
 		expect(user!.content).toContain('els dissabtes');
 	});
 

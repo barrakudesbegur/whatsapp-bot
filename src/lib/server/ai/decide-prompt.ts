@@ -1,12 +1,21 @@
 /**
  * Builds the messages for the single decide() call. Pure — unit-tested without a
- * model. The system prompt gives Kudi its voice, the current submission draft
- * (what's known / still missing), the whitelisted actions, the anti-rigidity
- * rules, and the knowledge base. The conversation history goes in as REAL
- * user/assistant turns (not narrated text): chat-tuned models key on turn
+ * model. The system prompt gives Kudi its voice, the whitelisted actions, the
+ * anti-rigidity rules, and the knowledge base. The conversation history goes in
+ * as REAL user/assistant turns (not narrated text): chat-tuned models key on turn
  * structure, and a bare «sí» is only unambiguous as an answer when the model's
- * own previous question is an actual assistant turn. The current inbound is the
- * final, fenced user message.
+ * own previous question is an actual assistant turn. The current submission draft
+ * («what's known / still missing») and the fenced inbound both ride in the FINAL
+ * user turn.
+ *
+ * PREFIX CACHING (frugality): the system prompt is deliberately kept free of
+ * per-turn-volatile data (the draft, the current name) so it is byte-identical
+ * across a person's turns — and across people at a given moment. Workers AI does
+ * prefix caching, and workers-ai-decider.ts sends `x-session-affinity` so a
+ * person's turns hit the same warm instance; an identical prefix is then served
+ * from cache (discounted tokens, faster TTFT) instead of being re-prefilled every
+ * message. Anything that changes turn-to-turn therefore lives in the final user
+ * turn, after the (stable) system prompt and the (growing) transcript.
  *
  * Design intent (owner): the model UNDERSTANDS every message, DECIDES what to do,
  * ACTS via actions, and stays flexible — it must never get stuck demanding a
@@ -87,13 +96,13 @@ function systemPrompt(state: DecisionState): string {
 		);
 	}
 
-	// --- Current draft ---
-	parts.push('\n## ESBORRANY ACTUAL (el que ja saps)\n' + draftSummary(state));
-
 	// --- Fields + options ---
+	// (The current draft — what's known / still missing for THIS person — is NOT
+	// here: it changes every turn and would break the prefix cache. It rides in
+	// the final user turn instead; see userBlock.)
 	parts.push(
 		'\n## CAMPS DE LA INSCRIPCIÓ\n' +
-			`- *nom*: com vol que li diguis. Ara: ${state.person.displayName ?? '(cap)'}.\n` +
+			'- *nom*: com vol que li diguis.\n' +
 			'- *signup* (què vol que faci quan se sàpiga si es fa el curs), una d’aquestes opcions:\n' +
 			`    · grup — «${SIGNUP_LABELS.grup}»\n` +
 			`    · avisam — «${SIGNUP_LABELS.avisam}»\n` +
@@ -126,7 +135,7 @@ function systemPrompt(state: DecisionState): string {
 			'- Si es NEGUEN a donar-te el nom, no insisteixis: digue’ls que de moment els dius «Anònim» (emet set_display_name amb name "Anònim") i CONTINUA amb la conversa. Però NO esmentis MAI aquesta opció d’entrada — és el recurs per a l’excepció, no forma part de la pregunta.\n' +
 			'- Pots fer diverses coses a la vegada: respondre una pregunta I desar una dada en el mateix torn.\n' +
 			'- Poden canviar respostes anteriors quan vulguin; actualitza-les sense embuts.\n' +
-			'- Quan encara falten dades (mira «FALTA» a sota), demana la següent (o un parell, si el missatge segueix sent curt) de manera natural dins la teva resposta. Quan no en falta cap, tanca amb un missatge maco i sense cap control.\n' +
+			'- Quan encara falten dades (mira «FALTA» a l’ESTAT ACTUAL del final), demana la següent (o un parell, si el missatge segueix sent curt) de manera natural dins la teva resposta. Quan no en falta cap, tanca amb un missatge maco i sense cap control.\n' +
 			'- Si l’enquesta ja està COMPLETADA, MAI tornis a fer-ne les preguntes ni a oferir les opcions (grup/avisar/res); només actualitza-la si la persona demana canviar una resposta.\n' +
 			'- Quan preguntin pels Barrakudes o pels esdeveniments, respon TU amb la info del CONEIXEMENT (dates, cartells, enllaços): NO els enviïs a la web ni a l’Instagram si la resposta ja la tens. Recomanar l’Instagram és només per quan NO saps la resposta. I no els desviïs cap a l’enquesta si t’estan preguntant una altra cosa.\n' +
 			'- MIRA SEMPRE la conversa anterior. Si el teu últim missatge feia una pregunta i la persona hi respon (encara que sigui només «sí», «no» o una opció tocada), ACTUA sobre la resposta: fes el que oferies o passa al següent pas. MAI tornis a fer la mateixa pregunta, MAI et tornis a presentar si ja us heu saludat, i no repeteixis informació que ja has donat.\n' +
@@ -203,7 +212,15 @@ function draftSummary(state: DecisionState): string {
 
 function userBlock(state: DecisionState): string {
 	const note = state.tapped ? ' (la persona ha TOCAT aquesta opció)' : '';
+	// The volatile per-turn state (draft + what's still missing) rides here, in
+	// the final user turn, so the system prompt above stays byte-identical and
+	// prefix-cacheable. It sits right before the person's message so the model
+	// acts on the freshest state. Kudi's own data, not person-controlled input —
+	// the person's text stays fenced in <missatge>.
 	return (
+		'## ESTAT ACTUAL (el que ja saps d’aquesta persona)\n' +
+		draftSummary(state) +
+		'\n\n' +
 		`Missatge de la persona${note}:\n<missatge>\n${state.userMessage}\n</missatge>\n` +
 		'(Recorda: respon NOMÉS amb el JSON {"replies":[…],"actions":[…]} — cap text fora del JSON.)'
 	);

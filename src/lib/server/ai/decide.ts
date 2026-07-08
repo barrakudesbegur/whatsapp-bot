@@ -120,6 +120,15 @@ export interface DecisionState {
 	userMessage: string;
 	/** True when `userMessage` came from tapping an option rather than typing. */
 	tapped: boolean;
+	/**
+	 * Stable, non-PII per-person routing key for Workers AI prefix caching
+	 * (sent as `x-session-affinity`). A person's consecutive turns route to the
+	 * same warm instance, so the identical system prefix is served from cache
+	 * instead of re-prefilled — cheaper (discounted cached tokens) and faster
+	 * (better TTFT). Optional: test/eval states omit it and the decider just
+	 * skips the header. See workers-ai-decider.ts.
+	 */
+	sessionKey?: string;
 }
 
 export interface DecideOutput {
