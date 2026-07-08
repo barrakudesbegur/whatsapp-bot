@@ -171,6 +171,10 @@ export class D1Store implements Store {
 	}
 
 	async createFlowInstance(input: CreateFlowInput): Promise<FlowInstanceRow> {
+		// Plain INSERT: once migration 0004's partial unique index exists, a second
+		// concurrent 'active' insert for the same (person, flow) violates it and this
+		// THROWS — persistSurvey catches that and updates the winner. Without the index
+		// (pre-migration) it just inserts, so the code is safe either way.
 		const row = await this.db
 			.prepare(
 				`INSERT INTO flow_instances
@@ -190,13 +194,17 @@ export class D1Store implements Store {
 		return row as FlowInstanceRow;
 	}
 
-	async updateFlowInstance(id: number, input: UpdateFlowInput): Promise<void> {
-		await this.db
+	async casUpdateFlowInstance(
+		id: number,
+		expectedDataJson: string,
+		input: UpdateFlowInput
+	): Promise<boolean> {
+		const row = await this.db
 			.prepare(
 				`UPDATE flow_instances
-           SET status = ?2, step = ?3, data_json = ?4, updated_at = ?5,
-               completed_at = COALESCE(?6, completed_at)
-         WHERE id = ?1`
+           SET status = ?2, step = ?3, data_json = ?4, updated_at = ?5, completed_at = ?6
+         WHERE id = ?1 AND data_json = ?7
+         RETURNING id`
 			)
 			.bind(
 				id,
@@ -204,9 +212,11 @@ export class D1Store implements Store {
 				input.step,
 				input.dataJson,
 				input.updatedAt,
-				input.completedAt ?? null
+				input.completedAt ?? null,
+				expectedDataJson
 			)
-			.run();
+			.first<{ id: number }>();
+		return row !== null; // null → data_json changed under us (stale CAS)
 	}
 
 	async getSetting(key: string): Promise<string | null> {

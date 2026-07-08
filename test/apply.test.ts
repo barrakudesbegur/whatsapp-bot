@@ -200,6 +200,109 @@ describe('applyDecision — writes', () => {
 	});
 });
 
+describe('applyDecision — concurrent-safe persistence', () => {
+	it('merges onto the freshest stored data — a stale snapshot cannot clobber another field', async () => {
+		const { store, person, deps } = await setup();
+		// Turn A records signup=grup.
+		await run(deps, person, {
+			replies: [{ text: 'ok' }],
+			actions: [{ type: 'record_signup', choice: 'grup' }]
+		});
+		// Turn B loaded BEFORE A's write (stale: signup=null, no instance) and records
+		// availability. It must merge onto A's persisted signup, not overwrite it.
+		await run(
+			deps,
+			person,
+			{
+				replies: [{ text: 'ok' }],
+				actions: [{ type: 'record_availability', bucket: 'dissabtes' }]
+			},
+			{
+				survey: {
+					status: 'active',
+					collected: { signup: null, availability: null, availabilityRaw: null },
+					instanceId: null
+				}
+			}
+		);
+		const row = await surveyRow(store, person.id);
+		expect(JSON.parse(row!.data_json)).toEqual({ action: 'grup', availability: 'dissabtes' });
+		expect(row?.status).toBe('completed'); // grup survived → both fields set → completed
+	});
+
+	it('reopening a completed survey via restart clears the stale completed_at', async () => {
+		const { store, person, deps } = await setup();
+		await run(deps, person, {
+			replies: [{ text: 'ok' }],
+			actions: [
+				{ type: 'record_signup', choice: 'grup' },
+				{ type: 'record_availability', bucket: 'dissabtes' }
+			]
+		});
+		let row = await surveyRow(store, person.id);
+		expect(row?.completed_at).not.toBeNull();
+
+		await run(
+			deps,
+			person,
+			{ replies: [{ text: 'refem-ho' }], actions: [{ type: 'restart_survey' }] },
+			{
+				survey: {
+					status: 'completed',
+					collected: { signup: 'grup', availability: 'dissabtes', availabilityRaw: null },
+					instanceId: row!.id
+				}
+			}
+		);
+		row = await surveyRow(store, person.id);
+		expect(row?.status).toBe('active');
+		expect(row?.completed_at).toBeNull(); // cleared on reopen
+		expect(JSON.parse(row!.data_json)).toEqual({});
+	});
+
+	it('the store rejects a second active instance for the same person+flow (create-race guard)', async () => {
+		const { store, person } = await setup();
+		const seed = {
+			personId: person.id,
+			flowType: 'curs-sardanes',
+			status: 'active' as const,
+			step: null,
+			dataJson: '{}',
+			createdAt: 't0'
+		};
+		await store.createFlowInstance(seed);
+		await expect(store.createFlowInstance({ ...seed, createdAt: 't1' })).rejects.toThrow();
+	});
+
+	it('casUpdateFlowInstance only writes when data_json is unchanged', async () => {
+		const { store, person } = await setup();
+		const f = await store.createFlowInstance({
+			personId: person.id,
+			flowType: 'curs-sardanes',
+			status: 'active',
+			step: null,
+			dataJson: '{"action":"grup"}',
+			createdAt: 't0'
+		});
+		const upd = (data: string) => ({
+			status: 'active' as const,
+			step: null,
+			dataJson: data,
+			updatedAt: 't1',
+			completedAt: null
+		});
+		// Stale expected value → no write, reports false.
+		expect(await store.casUpdateFlowInstance(f.id, '{}', upd('{"x":1}'))).toBe(false);
+		// Correct expected value → writes, reports true.
+		expect(
+			await store.casUpdateFlowInstance(f.id, '{"action":"grup"}', upd('{"action":"avisam"}'))
+		).toBe(true);
+		expect(JSON.parse((await surveyRow(store, person.id))!.data_json)).toEqual({
+			action: 'avisam'
+		});
+	});
+});
+
 describe('applyDecision — reply rendering', () => {
 	it('a decision with no control sends a plain text', async () => {
 		const { person, deps } = await setup();

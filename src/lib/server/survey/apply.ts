@@ -17,7 +17,13 @@ import type { Store, FlowStatusRow } from '../db/store.ts';
 import type { Sender, SentMessage } from '../wa/sender.ts';
 import { fallbackDecision } from '../ai/decide.ts';
 import type { AiMeta, Control, Decision, DecisionState } from '../ai/decide.ts';
-import { SURVEY_ID, toDataJson, deriveStatus, type SurveyCollected } from './spec.ts';
+import {
+	SURVEY_ID,
+	toDataJson,
+	deriveStatus,
+	parseCollected,
+	type SurveyCollected
+} from './spec.ts';
 import { nowIso } from '../time.ts';
 
 export interface ApplyDeps {
@@ -36,7 +42,11 @@ export async function applyDecision(
 	const now = nowIso();
 	const { store, sender } = deps;
 
-	let draft: SurveyCollected = { ...state.survey.collected };
+	// Accumulate only the fields THIS turn changed (not the whole draft): persistSurvey
+	// merges them onto the freshest stored data, so a field this turn didn't touch is
+	// never overwritten with a stale snapshot value (concurrent-tap safety).
+	const changes: Partial<SurveyCollected> = {};
+	let resetSurvey = false;
 	let surveyTouched = false;
 
 	for (const action of decision.actions) {
@@ -52,11 +62,15 @@ export async function applyDecision(
 				surveyTouched = true;
 				break;
 			case 'restart_survey':
-				draft = { signup: null, availability: null, availabilityRaw: null };
+				// Reset all answers; a later action in the same turn re-applies over it.
+				resetSurvey = true;
+				delete changes.signup;
+				delete changes.availability;
+				delete changes.availabilityRaw;
 				surveyTouched = true;
 				break;
 			case 'record_signup':
-				draft.signup = action.choice;
+				changes.signup = action.choice;
 				surveyTouched = true;
 				break;
 			case 'record_availability': {
@@ -66,37 +80,26 @@ export async function applyDecision(
 					// with an uninterpretable bucket the model then never re-asks. Skip it
 					// so deriveMissing keeps asking for a real availability.
 					if (!note) break;
-					draft.availability = 'custom';
-					draft.availabilityRaw = note;
+					changes.availability = 'custom';
+					changes.availabilityRaw = note;
 				} else {
-					draft.availability = action.bucket;
-					draft.availabilityRaw = null;
+					changes.availability = action.bucket;
+					changes.availabilityRaw = null;
 				}
 				surveyTouched = true;
 				break;
 			}
 			case 'decline_survey':
-				draft.signup = 'res';
+				changes.signup = 'res';
 				surveyTouched = true;
 				break;
 		}
 	}
 
-	// Persist the survey draft (code derives completion; the model never completes).
-	// Status is derived from the FINAL draft so a decision that both declines and
-	// re-signs up (contradictory model output) is resolved last-write-wins by the
-	// draft, not latched to 'declined' regardless of later actions.
+	// Persist the changes (code derives completion; the model never completes).
 	let surveyInstanceId = state.survey.instanceId;
 	if (surveyTouched) {
-		const status = deriveStatus(draft);
-		surveyInstanceId = await persistSurvey(
-			store,
-			person.id,
-			state.survey.instanceId,
-			draft,
-			status === 'none' ? 'active' : status,
-			now
-		);
+		surveyInstanceId = await persistSurvey(store, person.id, changes, resetSurvey, now);
 	}
 
 	// Never leave the person with silence after the typing indicator: if every
@@ -148,44 +151,86 @@ function nameIsGrounded(name: string, state: DecisionState): boolean {
 	return userTexts.some((t) => fold(t).includes(n));
 }
 
+const EMPTY_COLLECTED: SurveyCollected = {
+	signup: null,
+	availability: null,
+	availabilityRaw: null
+};
+
+function mergeCollected(base: SurveyCollected, changes: Partial<SurveyCollected>): SurveyCollected {
+	const merged = { ...base, ...changes };
+	if (merged.availability !== 'custom') merged.availabilityRaw = null;
+	return merged;
+}
+
+/** deriveStatus mapped to a persistable FlowStatusRow ('none' → 'active'). */
+function statusOf(c: SurveyCollected): FlowStatusRow {
+	const s = deriveStatus(c);
+	return s === 'none' ? 'active' : s;
+}
+
+/**
+ * Persist THIS turn's survey changes against the freshest instance, with an
+ * optimistic CAS retry. We re-read the latest instance (not the seconds-old
+ * snapshot taken at state-load, before the model call), merge only what changed,
+ * and compare-and-swap on data_json — so two fast taps on different fields can't
+ * clobber each other. Code owns completion; the model never sets status.
+ */
 async function persistSurvey(
 	store: Store,
 	personId: number,
-	instanceId: number | null,
-	draft: SurveyCollected,
-	status: FlowStatusRow,
+	changes: Partial<SurveyCollected>,
+	reset: boolean,
 	now: string
 ): Promise<number> {
-	const done = status === 'completed' || status === 'declined';
-	const dataJson = toDataJson(draft);
-	if (instanceId != null) {
-		await store.updateFlowInstance(instanceId, {
-			status,
-			step: null,
-			dataJson,
-			updatedAt: now,
-			completedAt: done ? now : null
-		});
-		return instanceId;
+	for (let attempt = 0; attempt < 5; attempt++) {
+		const latest = await store.getLatestFlowInstance(personId, SURVEY_ID);
+		if (latest) {
+			const base = reset ? EMPTY_COLLECTED : parseCollected(latest.data_json);
+			const merged = mergeCollected(base, changes);
+			const status = statusOf(merged);
+			const done = status === 'completed' || status === 'declined';
+			const ok = await store.casUpdateFlowInstance(latest.id, latest.data_json, {
+				status,
+				step: null,
+				dataJson: toDataJson(merged),
+				updatedAt: now,
+				completedAt: done ? now : null
+			});
+			if (ok) return latest.id;
+			continue; // a concurrent turn changed data_json → re-read + retry
+		}
+		// First touch → create. If a concurrent create won (partial-unique-index
+		// violation), createFlowInstance throws → loop finds the winner and updates it.
+		const merged = mergeCollected(EMPTY_COLLECTED, changes);
+		const status = statusOf(merged);
+		const dataJson = toDataJson(merged);
+		try {
+			const row = await store.createFlowInstance({
+				personId,
+				flowType: SURVEY_ID,
+				status,
+				step: null,
+				dataJson,
+				createdAt: now
+			});
+			// createFlowInstance leaves completed_at null; stamp it for a terminal status.
+			if (status === 'completed' || status === 'declined') {
+				await store.casUpdateFlowInstance(row.id, dataJson, {
+					status,
+					step: null,
+					dataJson,
+					updatedAt: now,
+					completedAt: now
+				});
+			}
+			return row.id;
+		} catch {
+			// Lost the create race → next iteration updates the winner.
+		}
 	}
-	const row = await store.createFlowInstance({
-		personId,
-		flowType: SURVEY_ID,
-		status,
-		step: null,
-		dataJson,
-		createdAt: now
-	});
-	if (done) {
-		await store.updateFlowInstance(row.id, {
-			status,
-			step: null,
-			dataJson,
-			updatedAt: now,
-			completedAt: now
-		});
-	}
-	return row.id;
+	// Extreme contention (5 CAS misses in a row) — return the current instance id.
+	return (await store.getLatestFlowInstance(personId, SURVEY_ID))?.id ?? 0;
 }
 
 /**

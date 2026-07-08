@@ -121,9 +121,22 @@ export interface Store {
 	// Flow instances (the per-person, per-flow submission draft).
 	/** The latest instance of `flowType` for a person (their survey draft). */
 	getLatestFlowInstance(personId: number, flowType: string): Promise<FlowInstanceRow | null>;
+	/** Create a new instance. THROWS on the partial-unique-index violation when an
+	 *  active instance already exists for this (person, flow) — persistSurvey turns
+	 *  that into an update of the winner (the create race). */
 	createFlowInstance(input: CreateFlowInput): Promise<FlowInstanceRow>;
-	/** Update a draft's status/step/data/timestamps (completed_at is COALESCE-preserved). */
-	updateFlowInstance(id: number, input: UpdateFlowInput): Promise<void>;
+	/**
+	 * Compare-and-swap update: only writes when `expectedDataJson` still matches the
+	 * stored `data_json`, so a concurrent turn that changed a different field can't be
+	 * clobbered. Returns true on match, false on a stale CAS (caller re-reads +
+	 * retries). Unlike the old updateFlowInstance, completed_at is SET explicitly
+	 * (not COALESCE-preserved), so reopening an instance clears a stale timestamp.
+	 */
+	casUpdateFlowInstance(
+		id: number,
+		expectedDataJson: string,
+		input: UpdateFlowInput
+	): Promise<boolean>;
 
 	// Settings
 	getSetting(key: string): Promise<string | null>;

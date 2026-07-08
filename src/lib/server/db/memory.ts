@@ -179,6 +179,17 @@ export class MemoryStore implements Store {
 	}
 
 	async createFlowInstance(input: CreateFlowInput): Promise<FlowInstanceRow> {
+		// Mirror migration 0004's partial unique index: at most one active instance
+		// per (person, flow). A second concurrent active create THROWS, like D1.
+		if (
+			input.status === 'active' &&
+			this.flows.some(
+				(f) =>
+					f.person_id === input.personId && f.flow_type === input.flowType && f.status === 'active'
+			)
+		) {
+			throw new Error('UNIQUE constraint failed: idx_flow_one_active');
+		}
 		const row: FlowInstanceRow = {
 			id: ++this.seq.flow,
 			person_id: input.personId,
@@ -194,14 +205,19 @@ export class MemoryStore implements Store {
 		return { ...row };
 	}
 
-	async updateFlowInstance(id: number, input: UpdateFlowInput): Promise<void> {
+	async casUpdateFlowInstance(
+		id: number,
+		expectedDataJson: string,
+		input: UpdateFlowInput
+	): Promise<boolean> {
 		const f = this.flows.find((f) => f.id === id);
-		if (!f) return;
+		if (!f || f.data_json !== expectedDataJson) return false;
 		f.status = input.status;
 		f.step = input.step;
 		f.data_json = input.dataJson;
 		f.updated_at = input.updatedAt;
-		if (input.completedAt != null) f.completed_at = input.completedAt;
+		f.completed_at = input.completedAt ?? null; // SET explicitly (clears on reopen)
+		return true;
 	}
 
 	// Settings --------------------------------------------------------------
