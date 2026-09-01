@@ -1,5 +1,12 @@
 # whatsapp-bot — "Kudi"
 
+> **Not deployed. Decommissioned on 2026-09-02.** The Worker, its D1 database,
+> `wa.barrakudesbegur.org`, the Access app and the four Meta secrets are all
+> deleted, along with the push-to-deploy workflow. The Meta app itself still
+> needs unhooking by hand. The code still runs locally with `WA_ENABLED=false`.
+> Full inventory and rebuild notes live in the sibling repo, at
+> [`curs-sardanes/docs/DEPLOY.md`](https://github.com/barrakudesbegur/curs-sardanes/blob/main/docs/DEPLOY.md).
+
 WhatsApp bot for **Barrakudes de Begur** (youth association, barrakudesbegur.org).
 Kudi is the orange nino from the Barrakudes logo. This is a general-purpose,
 **AI-first** bot for the association; its first job is the **curs-sardanes**
